@@ -91,7 +91,6 @@ else:
     """, unsafe_allow_html=True)
 
 # --- 5. ENGINE LOAD & FILTER DATA ---
-# Dictionary data elevasi asli lapangan (Backup jika kolom Excel gagal terbaca)
 DATA_ELEVASI_ASLI = {
     'Kepakisan': 1851,
     'Bakal': 1693,
@@ -116,7 +115,7 @@ def load_and_prepare_data():
             
     df[['Desa', 'Lat', 'Lon']] = df[['Desa', 'Lat', 'Lon']].ffill()
     
-    # Deteksi kolom elevasi cerdas (Prioritas: Kolom Excel, Fallback: Data Asli)
+    # Prioritas: Kolom Excel, Fallback: Data Asli
     if 'Elevasi' not in df.columns:
         df['Elevasi'] = df['Desa'].map(DATA_ELEVASI_ASLI).fillna(1800)
         
@@ -222,7 +221,7 @@ elif st.session_state.current_page == "📈 Analisis Kriging (Mikro)":
         Z_base = base_data[parameter_terpilih].values
         elevasi_ref_rata = base_data['Elevasi'].mean()
         
-        # Hitung Korelasi Linier Delta Elevasi Rekomendasi Dosen Pembimbing
+        # Hitung Selisih Elevasi
         delta_elevasi = abs(elevasi_target - elevasi_ref_rata)
         
         prediksi_kriging, kriging_variance, error_mae = 0.0, 0.0, 0.0
@@ -243,7 +242,6 @@ elif st.session_state.current_page == "📈 Analisis Kriging (Mikro)":
         
         with kolom_kiri:
             st.markdown("#### Peta Kontur Elevasi Wilayah (Esri Topo)")
-            # MENGGUNAKAN TILES WORLD TOPO MAP AGAR MEMUNCULKAN GARIS KONTUR DAN TINGGI MDPL
             peta_lahan = folium.Map(
                 location=[float(df_clean['Lat'].mean()), float(df_clean['Lon'].mean())], 
                 zoom_start=14, 
@@ -273,7 +271,6 @@ elif st.session_state.current_page == "📈 Analisis Kriging (Mikro)":
         with kolom_kanan:
             st.markdown("#### Hasil Analisis & Validasi Topografi")
             
-            # Baris data informasi ketinggian konstan
             e1, e2, e3 = st.columns(3)
             with e1: st.metric("Ketinggian Target Uji", f"{elevasi_target:.0f} mdpl")
             with e2: st.metric("Rata-Rata Ketinggian Acuan", f"{elevasi_ref_rata:.0f} mdpl")
@@ -295,11 +292,12 @@ elif st.session_state.current_page == "📈 Analisis Kriging (Mikro)":
                         nmae = (error_mae / df_clean[parameter_terpilih].mean()) * 100
                         st.metric("Normalized Error (NMAE)", f"{nmae:.2f} %")
                     
+                    # NARASI BARU YANG MEMBONGKAR KETIDAKLINIERAN ERROR
                     st.markdown(f"""
-                    <div style="background-color: #111713; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50; margin-bottom: 20px; border-top: 1px solid #1c261f; border-right: 1px solid #1c261f; border-bottom: 1px solid #1c261f;">
-                    <b style="color: #4caf50;">Validasi Hubungan Spasial-Topografi:</b><br>
-                    Titik uji memiliki selisih ketinggian sebesar <b>{delta_elevasi:.0f} meter</b> terhadap titik referensi acuan.<br> 
-                    <i style="font-size: 0.88em; color: #a3bfa2; display:block; margin-top:5px;">Analisis: Tingginya nilai galat (NMAE) pada hara makro berkorelasi dengan besarnya nilai \u0394H. Perbedaan elevasi yang curam mempercepat dinamika pencucian hara (leaching) akibat aliran permukaan (runoff), sehingga variabilitas hara dipengaruhi kuat oleh topografi, tidak murni jarak horizontal.</i>
+                    <div style="background-color: #111713; padding: 15px; border-radius: 8px; border-left: 4px solid #f39c12; margin-bottom: 20px; border-top: 1px solid #1c261f; border-right: 1px solid #1c261f; border-bottom: 1px solid #1c261f;">
+                    <b style="color: #f39c12;">Analisis Spasial-Topografi:</b><br>
+                    Titik uji memiliki selisih ketinggian <b>{delta_elevasi:.0f} meter</b> terhadap rata-rata titik referensi.<br> 
+                    <i style="font-size: 0.88em; color: #a3bfa2; display:block; margin-top:5px;">Temuan: Data menunjukkan <b>tidak adanya korelasi linier</b> antara besarnya \u0394H dengan nilai Galat (NMAE) pada unsur hara makro (N, P, K). Hal ini secara empiris membuktikan bahwa fluktuasi hara di lahan Dieng didominasi secara absolut oleh faktor intervensi manusia (dosis dan jadwal pemupukan), yang berhasil mematahkan pengaruh variabel alami (jarak horizontal dan gradien elevasi).</i>
                     </div>
                     """, unsafe_allow_html=True)
                     

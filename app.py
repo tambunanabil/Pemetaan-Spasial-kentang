@@ -87,7 +87,6 @@ else:
     """, unsafe_allow_html=True)
 
 # --- 5. DATA LOADING LOGIC ENGINE ---
-# Kamus Sentroid Geografis Pendukung Plotting Peta Gradasi di Lapangan Satelit
 KOORDINAT_SENTRA = {
     'Karangtengah': [-7.21450, 109.81230], 'Bakal': [-7.22310, 109.82450], 'Sikunang': [-7.23410, 109.84120],
     'Kepakisan': [-7.20120, 109.79150], 'Dieng Kulon': [-7.21140, 109.80210], 'Sumberejo': [-7.22800, 109.83100],
@@ -136,16 +135,16 @@ def load_suitability_all_data():
     for col in ['EC_S1', 'N_S1', 'P_S1', 'K_S1', 'PH_S1', 'Moist_S1', 'Temp_D_S1', 'Elevasi', 'Produktivitas']:
         if col in df.columns: df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
             
-    # BINER/ORDINAL FILTER TEGAS: Mengonversi langsung string "Cocok", "Netral", "Tidak Sesuai" menjadi 2, 1, 0
-    def konversi_biner_skor(label):
+    # MATRIKS BOBOT INTENSITAS KESESUAIAN SEBAGAI VALUE GENERATOR HEATMAP
+    def tentukan_intensitas_weight(label):
         lbl = str(label).lower().strip()
         if "tidak" in lbl or "kurang" in lbl: 
-            return 0.0
+            return 0.15  # Intensitas Rendah (Menyalakan warna Merah Peringatan)
         elif "netral" in lbl: 
-            return 1.0
-        return 2.0
+            return 0.55  # Intensitas Sedang (Menyalakan warna Kuning Transisi)
+        return 1.00      # Intensitas Maksimum (Menyalakan warna Hijau Cocok)
         
-    df['Skor_Kesesuaian'] = df['Kecocokan'].apply(konversi_biner_skor)
+    df['Intensitas_Weight'] = df['Kecocokan'].apply(tentukan_intensitas_weight)
     return df.dropna(subset=['Desa', 'Kecocokan'])
 
 df_kriging = load_kriging_base_data()
@@ -161,18 +160,15 @@ if st.session_state.current_page == "Beranda Utama":
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        # MENU PERTAMA: PETA SEBARAN DARI LINK ARCGIS ONLINE ASLI
-        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">public</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Peta Sebaran Titik Data</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Visualisasi spasial regional sebaran titik data yang diambil di lapangan pada 12 sentra produksi kentang Pulau Jawat melalui visualisasi platform ArcGIS Online.</p></div>""", unsafe_allow_html=True)
+        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">public</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Peta Sebaran Titik Data</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Visualisasi spasial regional sebaran titik data yang diambil di lapangan pada 12 sentra produksi kentang Pulau Jawa melalui visualisasi platform ArcGIS Online.</p></div>""", unsafe_allow_html=True)
         if st.button("Buka Peta Sebaran Titik  ›", key="go_to_gis", use_container_width=True):
             st.session_state.current_page = "Peta Sebaran Titik Data"; st.rerun()
     with col2:
-        # MENU KEDUA: DASHBOARD INTERPOLASI KRIGING MIKRO DIENG
         st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">architecture</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Interpolasi Geostatistik</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Mesin komputasi menggunakan pemodelan matematika <i>Ordinary Kriging</i> univariat guna mengestimasi hara (N, P, K, pH) tak tersampel via LOOCV pada 5 desa inti Dieng.</p></div>""", unsafe_allow_html=True)
         if st.button("Jalankan Modul Kriging  ›", key="go_to_kriging", use_container_width=True):
             st.session_state.current_page = "Analisis Kriging (Mikro)"; st.rerun()
     with col3:
-        # MENU KETIGA: PETA GRADASI KESESUAIAN SE-PULAU JAWA (DATA_KESESUAIAN)
-        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">layers</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Kesesuaian Lahan Bergradasi</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Pemetaan mikro spasial hasil interpolasi nilai biner tegas berskor kontinu dari berkas Data_Kesesuaian. Menghasilkan visualisasi heatmap bergradasi halus halus.</p></div>""", unsafe_allow_html=True)
+        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">layers</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Kesesuaian Lahan Bergradasi</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Pemetaan spasial kontinu beralur Heatmap bergradasi halus dari kisaran data klasifikasi model keputusan pada seluruh sentra di Pulau Jawa.</p></div>""", unsafe_allow_html=True)
         if st.button("Lihat Gradasi Kesesuaian Lahan ›", key="go_to_suitability", use_container_width=True):
             st.session_state.current_page = "Peta Gradasi Kesesuaian Lahan"; st.rerun()
             
@@ -181,7 +177,6 @@ if st.session_state.current_page == "Beranda Utama":
     st.markdown("<p style='text-align: center; color: #5b6b5c; font-size: 0.85em; letter-spacing: 1px; text-transform: uppercase;'>Tugas Akhir S1 Teknik Fisika &nbsp;|&nbsp; Universitas Telkom</p>", unsafe_allow_html=True)
 
 elif st.session_state.current_page == "Peta Sebaran Titik Data":
-    # --- FIXED MODUL MENU 1: IFRAME LINK GIS REGIONAL ASLI ---
     col1, col2 = st.columns([3, 1])
     with col1: st.markdown("<h1 style='font-weight: 300;'>Peta Sebaran Koordinat Titik Data Regional (Makro)</h1>", unsafe_allow_html=True)
     with col2:
@@ -190,11 +185,11 @@ elif st.session_state.current_page == "Peta Sebaran Titik Data":
     components.html(f'<iframe src="https://arcg.is/1LDCjO4" width="100%" height="650" style="border: 1px solid rgba(163, 191, 162, 0.2); border-radius: 6px; box-shadow: 0px 8px 30px rgba(0,0,0,0.85);"></iframe>', height=680)
 
 elif st.session_state.current_page == "Peta Gradasi Kesesuaian Lahan":
-    # --- FIXED MODUL MENU 3: HEATMAP GRADASI HALUS BINER DARI FILE DATA_KESESUAIAN ---
+    # --- FIXED MODUL MENU 3: DIREK HEATMAP DENSITAS TANPA INTERPOLASI UNTUK GRADASI REALISTIS ---
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.markdown("<h1 style='font-weight: 300;'>Peta Gradasi Kontinu Kesesuaian Lahan Mikro (12 Sentra)</h1>", unsafe_allow_html=True)
-        st.write("Visualisasi Nilai Klasifikasi Biner Lahan Kontinu: Merah (Tidak Sesuai), Kuning (Netral), dan Hijau (Cocok).")
+        st.markdown("<h1 style='font-weight: 300;'>Peta Gradasi Kontinu Kesesuaian Lahan Makro (12 Sentra)</h1>", unsafe_allow_html=True)
+        st.write("Visualisasi Alur Pancaran Kontinu Lapangan: Merah (Tidak Sesuai), Kuning (Netral), dan Hijau (Cocok).")
     with col2:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("‹  Kembali ke Beranda", key="back_from_suit", use_container_width=True): st.session_state.current_page = "Beranda Utama"; st.rerun()
@@ -202,42 +197,51 @@ elif st.session_state.current_page == "Peta Gradasi Kesesuaian Lahan":
     st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
     
     if df_suit_all is None or df_suit_all.empty:
-        st.error("Gagal mendeteksi berkas data kesesuaian di repositori.")
+        st.error("Gagal memproses berkas data kesesuaian di repositori.")
     else:
-        # Kelompokkan data rata-rata koordinat spasial dan skor biner tegas (0,1,2) per desa
-        df_suit_group = df_suit_all.groupby(['Desa', 'Lat', 'Lon']).mean(numeric_only=True).reset_index()
+        # Kelompokkan data rata-rata koordinat spasial per desa
+        df_suit_group = df_suit_all.groupby(['Desa', 'Lat', 'Lon', 'Kecocokan']).mean(numeric_only=True).reset_index()
         
-        # Penentuan batas grid spasial Pulau Jawa
-        lat_min, lat_max = df_suit_group['Lat'].min() - 0.3, df_suit_group['Lat'].max() + 0.3
-        lon_min, lon_max = df_suit_group['Lon'].min() - 0.3, df_suit_group['Lon'].max() + 0.3
-        
-        grid_lat = np.linspace(lat_min, lat_max, 80)
-        grid_lon = np.linspace(lon_min, lon_max, 80)
-        
-        # Eksekusi komputasi Ordinary Kriging pemetaan gradasi kontinu biner
-        OK_suit = OrdinaryKriging(
-            df_suit_group['Lon'].values, df_suit_group['Lat'].values, df_suit_group['Skor_Kesesuaian'].values,
-            variogram_model='linear', verbose=False, enable_plotting=False
+        # Inisialisasi peta dengan titik pusat rata-rata koordinat sentra Jawa
+        peta_heat = folium.Map(
+            location=[df_suit_group['Lat'].mean(), df_suit_group['Lon'].mean()], 
+            zoom_start=7, 
+            tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
+            attr='Esri Satellite'
         )
-        z_grid, ss_grid = OK_suit.execute('grid', grid_lon, grid_lat)
         
-        peta_heat = folium.Map(location=[df_suit_group['Lat'].mean(), df_suit_group['Lon'].mean()], zoom_start=7, tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri Satellite')
-        
-        data_heatmap = []
-        for i in range(len(grid_lat)):
-            for j in range(len(grid_lon)):
-                skor_val = max(0.0, min(z_grid[i, j], 2.0))
-                data_heatmap.append([grid_lat[i], grid_lon[j], skor_val])
-                
-        # Integrasi plugins HeatMap kontinu linear permukaan biner (0,1,2)
+        # Merakit data masukan HeatMap secara berurutan: [Lat, Lon, Weight]
+        input_data_heatmap = []
+        for _, row in df_suit_group.iterrows():
+            input_data_heatmap.append([row['Lat'], row['Lon'], row['Intensitas_Weight']])
+            
+        # SOLUSI GRADASI TOTAL: Radius radiasi besar dikombinasikan dengan tingkat blur halus setara contoh gambar
         HeatMap(
-            data=data_heatmap, radius=42, blur=28, min_opacity=0.38, max_val=2.0,
-            gradient={0.0: '#ff3333', 0.5: '#ff9933', 1.0: '#ffff33', 1.5: '#88ff33', 2.0: '#1f991f'}
+            data=input_data_heatmap,
+            radius=55,
+            blur=35,
+            min_opacity=0.45,
+            max_val=1.0,
+            gradient={
+                0.00: '#ff3333',   # Merah Pekat (Zonasi Tidak Sesuai)
+                0.40: '#ffcc33',   # Oranye-Kuning (Zonasi Transisi)
+                0.65: '#ffff33',   # Kuning Terang (Zonasi Netral)
+                0.85: '#99ff33',   # Hijau Muda Berpendar
+                1.00: '#00cc00'    # Hijau Zamrud (Zonasi Cocok)
+            }
         ).add_to(peta_heat)
         
-        # Tampilkan marker referensi transparan di atas heatmap
+        # Tampilkan penanda referensi transparan di atas area pancaran gradasi
         for _, row in df_suit_group.iterrows():
-            folium.CircleMarker(location=[row['Lat'], row['Lon']], radius=5, color='#ffffff', weight=1.0, fill_color='#222', fill_opacity=0.5, popup=f"<b>Sentra: {row['Desa']}</b><br>Skor Kontinu: {row['Skor_Kesesuaian']:.2f}").add_to(peta_heat)
+            folium.CircleMarker(
+                location=[row['Lat'], row['Lon']], 
+                radius=4, 
+                color='#ffffff', 
+                weight=1.0, 
+                fill_color='#111', 
+                fill_opacity=0.4, 
+                popup=f"<b>Sentra: {row['Desa']}</b><br>Status: {row['Kecocokan']}"
+            ).add_to(peta_heat)
             
         components.html(peta_heat._repr_html_(), height=620)
 

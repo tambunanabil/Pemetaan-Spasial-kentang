@@ -108,7 +108,6 @@ def load_suitability_all_data():
     path = 'Data_Sensor_1_91_All  .xlsx'
     if not os.path.exists(path): return None
     
-    # Membaca Sheet Data_All sesuai instruksi final Anda
     try:
         df = pd.read_excel(path, sheet_name='Data_All')
     except Exception as e:
@@ -116,7 +115,7 @@ def load_suitability_all_data():
         
     df.columns = [str(c).strip() for c in df.columns]
     
-    # Harmonisasi nama kolom peta kesesuaian
+    # SOLUSI PENYEBAB GALAT: Mengubah nama kolom 'Kecocokan' dari Excel secara paksa menjadi 'Kesesuaian'
     for c in df.columns:
         if c.lower() == 'titik': df = df.rename(columns={c: 'Desa'})
         if c.lower() == 'kecocokan': df = df.rename(columns={c: 'Kesesuaian'})
@@ -136,7 +135,6 @@ df_suit_all = load_suitability_all_data()
 # --- 6. INTERACTIVE ROUTING CONTROLLER ---
 
 if st.session_state.current_page == "Beranda Utama":
-    # --- INTERFACE MENU BERANDA (3 BLOCK UTAMA) ---
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("<h1 style='text-align: center; font-size: 2.8em; letter-spacing: 2px; color: #f2f8ea; font-weight: 300;'>SISTEM INFORMASI GEOSPASIAL<br>SENTRA PRODUKSI KENTANG PULAU JAWA</h1>", unsafe_allow_html=True)
     st.markdown("<h4 style='text-align: center; color: #8da68c; font-weight: 400; letter-spacing: 0.5px; margin-bottom: 50px;'>Integrasi Pemetaan Spasial Makro dan Komputasi Estimasi Ragam Hara Lapangan</h4>", unsafe_allow_html=True)
@@ -188,7 +186,7 @@ elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
         
         peta_all = folium.Map(
             location=[center_lat, center_lon], 
-            zoom_start=8, 
+            zoom_start=7, 
             tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
             attr='Esri Satellite'
         )

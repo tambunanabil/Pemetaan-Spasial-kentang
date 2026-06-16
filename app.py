@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import folium
-from folium.plugins import HeatMap
 import streamlit.components.v1 as components
 import os
 from pykrige.ok import OrdinaryKriging
@@ -45,7 +44,7 @@ st.markdown(f"""
         margin-bottom: 15px;
         text-align: center;
         backdrop-filter: blur(4px);
-        height: 240px;
+        height: 250px;
     }}
     .premium-icon {{
         font-size: 34px;
@@ -68,7 +67,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --- 4. CSS CONDITIONAL: DISMISS SIDEBAR PADA MODUL BERANDA, GIS, & KESESUAIAN ---
-if st.session_state.current_page in ["Beranda Utama", "Peta GIS Regional", "Peta Gradasi Kesesuaian Lahan"]:
+if st.session_state.current_page in ["Beranda Utama", "Peta GIS Regional", "Peta Kesesuaian Lahan Mikro"]:
     st.markdown("""
         <style>
         [data-testid="stSidebar"] { display: none !important; }
@@ -105,23 +104,34 @@ def load_kriging_base_data():
     return df.groupby(['Desa', 'Lat', 'Lon']).mean(numeric_only=True).reset_index().dropna()
 
 @st.cache_data
-def load_suitability_data():
+def load_suitability_all_data():
     path = 'Data_Sensor_1_91_All  .xlsx'
     if not os.path.exists(path): return None
+    
+    # Membaca Sheet Data_All sesuai instruksi final Anda
     try:
-        df = pd.read_excel(path, sheet_name='Train_Aug_Kesesuaian')
-    except:
-        df = pd.read_excel(path)
+        df = pd.read_excel(path, sheet_name='Data_All')
+    except Exception as e:
+        return None
+        
     df.columns = [str(c).strip() for c in df.columns]
+    
+    # Harmonisasi nama kolom peta kesesuaian
     for c in df.columns:
         if c.lower() == 'titik': df = df.rename(columns={c: 'Desa'})
+        if c.lower() == 'kecocokan': df = df.rename(columns={c: 'Kesesuaian'})
+            
     df[['Desa', 'Lat', 'Lon']] = df[['Desa', 'Lat', 'Lon']].ffill()
-    for col in ['Lat', 'Lon', 'Kesesuaian', 'Elevasi']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # Deteksi dan konversi koordinat serta parameter ukur sensor
+    for col in ['Lat', 'Lon', 'EC_S1', 'N_S1', 'P_S1', 'K_S1', 'PH_S1', 'Moist_S1', 'Temp_D_S1', 'Elevasi']:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            
     return df.dropna(subset=['Lat', 'Lon', 'Kesesuaian'])
 
 df_kriging = load_kriging_base_data()
-df_suitability = load_suitability_data()
+df_suit_all = load_suitability_all_data()
 
 # --- 6. INTERACTIVE ROUTING CONTROLLER ---
 
@@ -138,20 +148,19 @@ if st.session_state.current_page == "Beranda Utama":
         if st.button("Buka Peta Regional  ›", key="go_to_gis", use_container_width=True):
             st.session_state.current_page = "Peta GIS Regional"; st.rerun()
     with col2:
-        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">architecture</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Interpolasi Geostatistik</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Mesin komputasi menggunakan pemodelan matematika <i>Ordinary Kriging</i> univariat guna mengestimasi hara (N, P, K, pH) tak tersampel via LOOCV.</p></div>""", unsafe_allow_html=True)
+        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">architecture</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Interpolasi Geostatistik</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Mesin komputasi menggunakan pemodelan matematika <i>Ordinary Kriging</i> univariat guna mengestimasi hara (N, P, K, pH) tak tersampel via LOOCV pada 5 desa inti Dieng.</p></div>""", unsafe_allow_html=True)
         if st.button("Jalankan Modul Kriging  ›", key="go_to_kriging", use_container_width=True):
             st.session_state.current_page = "Analisis Kriging (Mikro)"; st.rerun()
     with col3:
-        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">layers</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Zonasi Kesesuaian Lahan</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Pemetaan mikro spasial dari kombinasi multivariabel keputusan ANN. Menghasilkan visualisasi bergradasi halus kontinu berbasis urutan nilai klasifikasi data.</p></div>""", unsafe_allow_html=True)
-        if st.button("Lihat Gradasi Kesesuaian Lahan ›", key="go_to_suitability", use_container_width=True):
-            st.session_state.current_page = "Peta Gradasi Kesesuaian Lahan"; st.rerun()
+        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">layers</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Zonasi Kesesuaian Lahan</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Visualisasi sebaran spasial mikro klasifikasi kesesuaian lahan hortikultura Pulau Jawa berdasarkan ekstraksi keputusan model ANN pada lembar data Data_All (12 sentra).</p></div>""", unsafe_allow_html=True)
+        if st.button("Lihat Kesesuaian Lahan ›", key="go_to_suitability", use_container_width=True):
+            st.session_state.current_page = "Peta Kesesuaian Lahan Mikro"; st.rerun()
             
     st.markdown("<div style='height: 200px;'></div>", unsafe_allow_html=True)
     st.markdown("<hr style='border-color: rgba(255,255,255,0.03); width: 100%;'>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #5b6b5c; font-size: 0.85em; letter-spacing: 1px; text-transform: uppercase;'>Tugas Akhir S1 Teknik Fisika &nbsp;|&nbsp; Universitas Telkom</p>", unsafe_allow_html=True)
 
 elif st.session_state.current_page == "Peta GIS Regional":
-    # --- MODUL 1: INTERFACE REGIONAL GIS ---
     col1, col2 = st.columns([3, 1])
     with col1: st.markdown("<h1 style='font-weight: 300;'>Peta Kesesuaian Lahan Digital Regional (Makro)</h1>", unsafe_allow_html=True)
     with col2:
@@ -159,51 +168,72 @@ elif st.session_state.current_page == "Peta GIS Regional":
         if st.button("‹  Kembali ke Beranda", use_container_width=True): st.session_state.current_page = "Beranda Utama"; st.rerun()
     components.html(f'<iframe src="https://arcg.is/1LDCjO4" width="100%" height="650" style="border: 1px solid rgba(163, 191, 162, 0.2); border-radius: 6px; box-shadow: 0px 8px 30px rgba(0,0,0,0.85);"></iframe>', height=680)
 
-elif st.session_state.current_page == "Peta Gradasi Kesesuaian Lahan":
-    # --- MODUL 3: INTERNAL INTEGRATED ORDINAL HEATMAP ---
+elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
+    # --- MODUL 3: MIKRO POINT MAP DARI SHEET DATA_ALL (12 SENTRA) ---
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.markdown("<h1 style='font-weight: 300;'>Peta Gradasi Kesesuaian Lahan Mikro</h1>", unsafe_allow_html=True)
-        st.write("Visualisasi kontinu integrasi model keputusan: Merah (Tidak Cocok [0]), Kuning (Netral [1]), dan Hijau (Cocok [2]).")
+        st.markdown("<h1 style='font-weight: 300;'>Peta Sebaran Kesesuaian Lahan Mikro (12 Sentra)</h1>", unsafe_allow_html=True)
+        st.write("Klasifikasi Keputusan Komparatif Lapangan: Hijau (Cocok), Oranye (Netral), dan Merah (Tidak Cocok).")
     with col2:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("‹  Kembali ke Beranda", key="back_from_suit", use_container_width=True): st.session_state.current_page = "Beranda Utama"; st.rerun()
         
     st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
     
-    if df_suitability is None or df_suitability.empty:
-        st.error("Gagal mendeteksi berkas 'Data_Sensor_1_91_All  .xlsx' atau sheet 'Train_Aug_Kesesuaian'.")
+    if df_suit_all is None or df_suit_all.empty:
+        st.error("Gagal mendeteksi berkas 'Data_Sensor_1_91_All  .xlsx' atau lembar data 'Data_All'.")
     else:
-        # PEMBENTUKAN MAP DENGAN INTERPOLASI KRIGING DINAMIS
-        df_suit_avg = df_suitability.groupby(['Desa', 'Lat', 'Lon']).mean(numeric_only=True).reset_index()
-        lat_min, lat_max = df_suit_avg['Lat'].min() - 0.02, df_suit_avg['Lat'].max() + 0.02
-        lon_min, lon_max = df_suit_avg['Lon'].min() - 0.02, df_suit_avg['Lon'].max() + 0.02
+        center_lat = df_suit_all['Lat'].mean()
+        center_lon = df_suit_all['Lon'].mean()
         
-        grid_lat = np.linspace(lat_min, lat_max, 100)
-        grid_lon = np.linspace(lon_min, lon_max, 100)
+        peta_all = folium.Map(
+            location=[center_lat, center_lon], 
+            zoom_start=8, 
+            tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
+            attr='Esri Satellite'
+        )
         
-        OK_suit = OrdinaryKriging(df_suit_avg['Lon'].values, df_suit_avg['Lat'].values, df_suit_avg['Kesesuaian'].values, variogram_model='linear', verbose=False)
-        z_grid, ss_grid = OK_suit.execute('grid', grid_lon, grid_lat)
-        
-        peta_suit = folium.Map(location=[df_suit_avg['Lat'].mean(), df_suit_avg['Lon'].mean()], zoom_start=13, tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri Satellite')
-        
-        data_heatmap = []
-        for i in range(len(grid_lat)):
-            for j in range(len(grid_lon)):
-                val = max(0.0, min(z_grid[i, j], 2.0))
-                data_heatmap.append([grid_lat[i], grid_lon[j], val])
-                
-        HeatMap(data=data_heatmap, radius=24, blur=16, min_opacity=0.2, max_val=2.0, gradient={0.0: '#ff3333', 0.5: '#ff9933', 1.0: '#ffff33', 1.5: '#88ff33', 2.0: '#1f991f'}).add_to(peta_suit)
-        
-        for _, row in df_suit_avg.iterrows():
-            skor = row['Kesesuaian']
-            warna_pin = 'green' if skor >= 1.5 else ('orange' if skor >= 0.7 else 'red')
-            folium.Marker(location=[row['Lat'], row['Lon']], popup=f"<b>Sentra: {row['Desa']}</b><br>Indeks: {skor:.2f}", icon=folium.Icon(color=warna_pin, icon='info-sign')).add_to(peta_suit)
+        for _, row in df_suit_all.iterrows():
+            status_label = str(row['Kesesuaian']).strip()
             
-        components.html(peta_suit._repr_html_(), height=620)
+            if "tidak" in status_label.lower():
+                warna_marker = 'red'
+            elif "netral" in status_label.lower():
+                warna_marker = 'orange'
+            else:
+                warna_marker = 'green'
+                
+            html_popup = f"""
+            <div style="font-family: 'Segoe UI', Arial; font-size: 12px; color: #fff; background-color: #0e1410; padding: 12px; border-radius: 6px; width: 190px; border: 1px solid #243528;">
+                <b style="color:#d2e7b9; font-size:13px; display:block; margin-bottom:6px;">Sentra: {row['Desa']}</b>
+                <span style="display:block; padding:3px 6px; background-color:{'#cc3333' if warna_marker=='red' else ('#e67e22' if warna_marker=='orange' else '#27ae60')}; color:white; border-radius:3px; text-align:center; font-weight:bold; margin-bottom:8px;">
+                    {status_label.upper()}
+                </span>
+                <table style="width: 100%; border-collapse: collapse; color:#eee;">
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);"><td>N Sensor</td><td style="text-align: right;"><b>{row.get('N_S1', 0):.2f}</b></td></tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);"><td>P Sensor</td><td style="text-align: right;"><b>{row.get('P_S1', 0):.2f}</b></td></tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);"><td>K Sensor</td><td style="text-align: right;"><b>{row.get('K_S1', 0):.2f}</b></td></tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);"><td>pH Tanah</td><td style="text-align: right;"><b>{row.get('PH_S1', 0):.2f}</b></td></tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);"><td>Elevasi</td><td style="text-align: right;"><b>{row.get('Elevasi', 0):.0f} m</b></td></tr>
+                    <tr><td>Suhu</td><td style="text-align: right;"><b>{row.get('Temp_D_S1', 0):.1f} °C</b></td></tr>
+                </table>
+            </div>
+            """
+            
+            folium.CircleMarker(
+                location=[row['Lat'], row['Lon']],
+                radius=8,
+                color='#ffffff',
+                weight=1.5,
+                fill_color='#cc3333' if warna_marker=='red' else ('#e67e22' if warna_marker=='orange' else '#27ae60'),
+                fill_opacity=0.85,
+                popup=folium.Popup(html_popup, max_width=250)
+            ).add_to(peta_all)
+            
+        components.html(peta_all._repr_html_(), height=620)
 
 elif st.session_state.current_page == "Analisis Kriging (Mikro)":
-    # --- MODUL 2: INTERFACES DASHBOARD INTERPOLASI HARA ---
+    # --- MODUL 2: DASHBOARD INTERPOLASI HARA (5 DESA INTI DIENG) ---
     st.markdown("<h1 style='font-weight: 300;'>Komputasi Ordinary Kriging (LOOCV)</h1>", unsafe_allow_html=True)
     st.markdown("Sistem Estimasi Ragam Hara Tanah Berbasis Topografi Kontur Lingkungan")
     st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
@@ -275,6 +305,6 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
                     c1, c2 = st.columns(2)
                     with c1: st.metric("Mean Absolute Error (MAE)", f"{error_mae:.2f}")
                     with c2: st.metric("Normalized Error (NMAE)", f"{(error_mae / df_kriging[parameter_terpilih].mean()) * 100:.2f} %")
-                    st.markdown(f"""<div style="background-color: rgba(19, 27, 21, 0.6); padding: 20px; border-radius: 6px; border-left: 3px solid #d4a373; margin-bottom: 20px; border-top: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.05);"><b style="color: #e2c099; font-weight: 500; font-size: 1.05em;">Analisis Spasial-Topografi</b><br><i style="font-size: 0.88em; color: #8da68c; display:block; margin-top:10px; line-height: 1.6;">Temuan: Data menunjukkan tidak adanya korelasi linier antara besarnya \u0394H dengan nilai Galat (NMAE) pada unsur hara makro (N, P, K). Hal ini secara empiris membuktikan bahwa fluktuasi hara didominasi secara absolut oleh faktor intervensi manusia (manajemen pemupukan).</i></div>""", unsafe_allow_html=True)
+                    st.markdown(f"""<div style="background-color: rgba(19, 27, 21, 0.6); padding: 20px; border-radius: 6px; border-left: 3px solid #d4a373; margin-bottom: 20px; border-top: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05); border-bottom: 1px solid rgba(19, 27, 21, 0.6);"><b style="color: #e2c099; font-weight: 500; font-size: 1.05em;">Analisis Spasial-Topografi</b><br><i style="font-size: 0.88em; color: #8da68c; display:block; margin-top:10px; line-height: 1.6;">Temuan: Data menunjukkan tidak adanya korelasi linier antara besarnya \u0394H dengan nilai Galat (NMAE) pada unsur hara makro (N, P, K). Hal ini secara empiris membuktikan bahwa fluktuasi hara didominasi secara absolut oleh faktor intervensi manusia (manajemen pemupukan).</i></div>""", unsafe_allow_html=True)
                 else: st.error(status_hitung)
             else: st.info("Sistem siaga. Tetapkan variabel lalu klik kalkulasi.")

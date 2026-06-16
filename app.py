@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import folium
+from folium.plugins import HeatMap
 import streamlit.components.v1 as components
 import os
 from pykrige.ok import OrdinaryKriging
@@ -88,30 +89,14 @@ else:
 # --- 5. DATA LOADING LOGIC ENGINE ---
 # Koordinat Sentroid Geografis Presisi untuk 12 Sentra Kentang Pulau Jawa (Ground Truth)
 KOORDINAT_SENTRA = {
-    'Karangtengah': [-7.21450, 109.81230],
-    'Bakal': [-7.22310, 109.82450],
-    'Sikunang': [-7.23410, 109.84120],
-    'Kepakisan': [-7.20120, 109.79150],
-    'Dieng Kulon': [-7.21140, 109.80210],
-    'Sumberejo': [-7.22800, 109.83100],
-    'Surengede': [-7.25100, 109.87200],
-    'Tieng': [-7.26300, 109.89100],
-    'Kledung': [-7.31200, 110.02100],
-    'Wonokitri': [-7.82100, 112.91200],
-    'Podokoyo': [-7.83400, 112.89400],
-    'Ngadisari': [-7.91200, 112.95100],
-    'Sapikerep': [-7.89500, 112.99200],
-    'Pandansari': [-7.92100, 112.88400],
-    'Wringinanom': [-7.90400, 112.72100],
-    'Ngantru': [-7.93100, 112.69400],
-    'Pudjon Kidul': [-7.88100, 112.45100],
-    'Margamukti': [-7.18200, 107.61200],
-    'Sukamanah': [-7.19400, 107.63100],
-    'Cikole': [-6.79100, 107.64100],
-    'Simpang': [-7.32100, 107.75100],
-    'Margamulya': [-7.21100, 107.60400],
-    'Cibeet': [-7.28400, 107.69100],
-    'Karya Mekar': [-7.25100, 107.72100],
+    'Karangtengah': [-7.21450, 109.81230], 'Bakal': [-7.22310, 109.82450], 'Sikunang': [-7.23410, 109.84120],
+    'Kepakisan': [-7.20120, 109.79150], 'Dieng Kulon': [-7.21140, 109.80210], 'Sumberejo': [-7.22800, 109.83100],
+    'Surengede': [-7.25100, 109.87200], 'Tieng': [-7.26300, 109.89100], 'Kledung': [-7.31200, 110.02100],
+    'Wonokitri': [-7.82100, 112.91200], 'Podokoyo': [-7.83400, 112.89400], 'Ngadisari': [-7.91200, 112.95100],
+    'Sapikerep': [-7.89500, 112.99200], 'Pandansari': [-7.92100, 112.88400], 'Wringinanom': [-7.90400, 112.72100],
+    'Ngantru': [-7.93100, 112.69400], 'Pudjon Kidul': [-7.88100, 112.45100], 'Margamukti': [-7.18200, 107.61200],
+    'Sukamanah': [-7.19400, 107.63100], 'Cikole': [-6.79100, 107.64100], 'Simpang': [-7.32100, 107.75100],
+    'Margamulya': [-7.21100, 107.60400], 'Cibeet': [-7.28400, 107.69100], 'Karya Mekar': [-7.25100, 107.72100],
     'Linggarjati': [-7.19100, 108.12100]
 }
 
@@ -124,48 +109,41 @@ def load_kriging_base_data():
     df = pd.read_excel(path)
     df.columns = [str(c).strip() for c in df.columns]
     for c in df.columns:
-        if 'titik' in c.lower() or 'desa' in c.lower():
-            df = df.rename(columns={c: 'Desa'})
+        if 'titik' in c.lower() or 'desa' in c.lower(): df = df.rename(columns={c: 'Desa'})
     df[['Desa', 'Lat', 'Lon']] = df[['Desa', 'Lat', 'Lon']].ffill()
-    if 'Elevasi' not in df.columns:
-        df['Elevasi'] = df['Desa'].map(DATA_ELEVASI_ASLI).fillna(1800)
-    for col in ['Lat', 'Lon', 'N', 'P', 'K', 'PH', 'Elevasi']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+    if 'Elevasi' not in df.columns: df['Elevasi'] = df['Desa'].map(DATA_ELEVASI_ASLI).fillna(1800)
+    for col in ['Lat', 'Lon', 'N', 'P', 'K', 'PH', 'Elevasi']: df[col] = pd.to_numeric(df[col], errors='coerce')
     return df.groupby(['Desa', 'Lat', 'Lon']).mean(numeric_only=True).reset_index().dropna()
 
 @st.cache_data
 def load_suitability_all_data():
-    # Sistem secara cerdas mendeteksi nama fail CSV atau Excel kesesuaian baru milikmu
     nama_fail = 'Data_Kesesuaian.xlsx - sheet 1.csv'
     if not os.path.exists(nama_fail):
         nama_fail = 'Data_Kesesuaian.xlsx'
-        if not os.path.exists(nama_fail):
-            return None
+        if not os.path.exists(nama_fail): return None
             
-    # Eksekusi fungsi pembacaan dinamis berbasis ekstensi fail asli
-    if nama_fail.endswith('.csv'):
-        df = pd.read_csv(nama_fail)
-    else:
-        df = pd.read_excel(nama_fail)
-        
+    df = pd.read_csv(nama_fail) if nama_fail.endswith('.csv') else pd.read_excel(nama_fail)
     df.columns = [str(c).strip() for c in df.columns]
     
-    # Penyelarasan kolom Desa dan Kecocokan
     for c in df.columns:
         if 'desa' in c.lower() or 'titik' in c.lower(): df = df.rename(columns={c: 'Desa'})
         if 'cocok' in c.lower() or 'kesesuaian' in c.lower(): df = df.rename(columns={c: 'Kecocokan'})
             
     df['Desa'] = df['Desa'].ffill()
-    
-    # Mapping koordinat spasial otomatis berbasis KOORDINAT_SENTRA
     df['Lat'] = df['Desa'].map(lambda x: KOORDINAT_SENTRA.get(str(x).strip(), [-7.5, 110.0])[0])
     df['Lon'] = df['Desa'].map(lambda x: KOORDINAT_SENTRA.get(str(x).strip(), [-7.5, 110.0])[1])
     
-    # Konversi numerik parameter sensor hara tanah hortikultura
     for col in ['EC_S1', 'N_S1', 'P_S1', 'K_S1', 'PH_S1', 'Moist_S1', 'Temp_D_S1', 'Elevasi', 'Produktivitas']:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+        if col in df.columns: df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
             
+    # Mengonversi label string dari fail Excel Anda menjadi skor numerik kontinu untuk basis Heatmap
+    def skor_kesesuaian(label):
+        lbl = str(label).lower()
+        if "tidak" in lbl or "kurang" in lbl: return 0.0
+        elif "netral" in lbl: return 1.0
+        return 2.0
+        
+    df['Skor_Kesesuaian'] = df['Kecocokan'].apply(skor_kesesuaian)
     return df.dropna(subset=['Desa', 'Kecocokan'])
 
 df_kriging = load_kriging_base_data()
@@ -187,7 +165,7 @@ if st.session_state.current_page == "Beranda Utama":
     with col2:
         st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">architecture</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Interpolasi Geostatistik</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Mesin komputasi menggunakan pemodelan matematika <i>Ordinary Kriging</i> univariat guna mengestimasi hara (N, P, K, pH) tak tersampel via LOOCV pada 5 desa inti Dieng.</p></div>""", unsafe_allow_html=True)
         if st.button("Jalankan Modul Kriging  ›", key="go_to_kriging", use_container_width=True):
-            st.session_state.current_page = "Analisis Kriging (Micro)"; st.rerun()
+            st.session_state.current_page = "Analisis Kriging (Mikro)"; st.rerun()
     with col3:
         st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">layers</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Zonasi Kesesuaian Lahan</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Visualisasi sebaran spasial mikro klasifikasi kesesuaian lahan hortikultura Pulau Jawa berdasarkan keputusan model ANN pada berkas Data_Kesesuaian.</p></div>""", unsafe_allow_html=True)
         if st.button("Lihat Kesesuaian Lahan ›", key="go_to_suitability", use_container_width=True):
@@ -206,11 +184,11 @@ elif st.session_state.current_page == "Peta GIS Regional":
     components.html(f'<iframe src="https://arcg.is/1LDCjO4" width="100%" height="650" style="border: 1px solid rgba(163, 191, 162, 0.2); border-radius: 6px; box-shadow: 0px 8px 30px rgba(0,0,0,0.85);"></iframe>', height=680)
 
 elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
-    # --- MODUL 3: SEBARAN MARKER SENTRA BERBASIS DATA_KESESUAIAN ---
+    # --- MODUL 3: SPATIAL HEATMAP GENERATOR UNTUK 12 SENTRA ---
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.markdown("<h1 style='font-weight: 300;'>Peta Sebaran Kesesuaian Lahan Mikro (12 Sentra)</h1>", unsafe_allow_html=True)
-        st.write("Klasifikasi Keputusan Komparatif Lahan: Hijau (Cocok), Oranye (Netral), dan Merah (Tidak Sesuai / Tidak Cocok).")
+        st.markdown("<h1 style='font-weight: 300;'>Peta Gradasi Kesesuaian Lahan Spasial (12 Sentra)</h1>", unsafe_allow_html=True)
+        st.write("Visualisasi Alur Kontinu: Merah (Tidak Sesuai [0.0]), Kuning (Netral [1.0]), dan Hijau (Cocok [2.0]).")
     with col2:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("‹  Kembali ke Beranda", key="back_from_suit", use_container_width=True): st.session_state.current_page = "Beranda Utama"; st.rerun()
@@ -218,31 +196,67 @@ elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
     st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
     
     if df_suit_all is None or df_suit_all.empty:
-        st.error("Gagal memproses berkas hara kesesuaian lahan hortikultura di repositori.")
+        st.error("Gagal memproses berkas data kesesuaian lahan hortikultura.")
     else:
+        # Rata-ratakan data koordinat spasial per desa
         df_suit_group = df_suit_all.groupby(['Desa', 'Lat', 'Lon', 'Kecocokan']).mean(numeric_only=True).reset_index()
         
+        # 1. BANGUN METODE INTERPOLASI GRID UNTUK EFEK GRADASI HEATMAP
+        lat_min, lat_max = df_suit_group['Lat'].min() - 0.25, df_suit_group['Lat'].max() + 0.25
+        lon_min, lon_max = df_suit_group['Lon'].min() - 0.25, df_suit_group['Lon'].max() + 0.25
+        
+        # Resolusi Grid Matriks untuk kehalusan peleburan warna gradasi
+        grid_lat = np.linspace(lat_min, lat_max, 60)
+        grid_lon = np.linspace(lon_min, lon_max, 60)
+        
+        # Operasikan Ordinary Kriging univariat linier mengubah skor biner/ordinal menjadi luaran kontinu
+        OK_suit = OrdinaryKriging(
+            df_suit_group['Lon'].values, 
+            df_suit_group['Lat'].values, 
+            df_suit_group['Skor_Kesesuaian'].values, 
+            variogram_model='linear', verbose=False, enable_plotting=False
+        )
+        z_grid, ss_grid = OK_suit.execute('grid', grid_lon, grid_lat)
+        
         peta_all = folium.Map(
-            location=[-7.5, 110.0], 
+            location=[df_suit_group['Lat'].mean(), df_suit_group['Lon'].mean()], 
             zoom_start=7, 
             tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
             attr='Esri Satellite'
         )
+        
+        # 2. EKSTRAKSI HASIL ESTIMASI GRID KE PLUGINS HEATMAP FOLIUM
+        data_heatmap = []
+        for i in range(len(grid_lat)):
+            for j in range(len(grid_lon)):
+                skor_interpolasi = max(0.0, min(z_grid[i, j], 2.0))
+                data_heatmap.append([grid_lat[i], grid_lon[j], skor_interpolasi])
+                
+        # Konfigurasi radius sebaran pengisian dan degradasi warna lampu lalu lintas (Traffic Light Scheme)
+        HeatMap(
+            data=data_heatmap,
+            radius=35,
+            blur=25,
+            min_opacity=0.3,
+            max_val=2.0,
+            gradient={
+                0.0: '#ff3333',   # Merah (Tidak Sesuai)
+                0.5: '#ff9933',   # Oranye (Transisi Pembatas)
+                1.0: '#ffff33',   # Kuning (Netral)
+                1.5: '#88ff33',   # Hijau Muda (Transisi Aman)
+                2.0: '#1f991f'    # Hijau Tua (Cocok)
+            }
+        ).add_to(peta_all)
 
+        # 3. TETAP MELETAKKAN MARKER SEBAGAI GROUND TRUTH YANG DAPAT DIKLIK
         for _, row in df_suit_group.iterrows():
             status_label = str(row['Kecocokan']).strip()
-            
-            if "tidak" in status_label.lower() or "kurang" in status_label.lower():
-                warna_marker = 'red'
-            elif "netral" in status_label.lower():
-                warna_marker = 'orange'
-            else:
-                warna_marker = 'green'
+            warna_pin = 'red' if ("tidak" in status_label.lower() or "kurang" in status_label.lower()) else ('orange' if "netral" in status_label.lower() else 'green')
                 
             html_popup = f"""
             <div style="font-family: 'Segoe UI', Arial; font-size: 12px; color: #fff; background-color: #0e1410; padding: 12px; border-radius: 6px; width: 190px; border: 1px solid #243528;">
                 <b style="color:#d2e7b9; font-size:13px; display:block; margin-bottom:6px;">Sentra: {row['Desa']}</b>
-                <span style="display:block; padding:3px 6px; background-color:{'#cc3333' if warna_marker=='red' else ('#e67e22' if warna_marker=='orange' else '#27ae60')}; color:white; border-radius:3px; text-align:center; font-weight:bold; margin-bottom:8px;">
+                <span style="display:block; padding:3px 6px; background-color:{'#cc3333' if warna_pin=='red' else ('#e67e22' if warna_pin=='orange' else '#27ae60')}; color:white; border-radius:3px; text-align:center; font-weight:bold; margin-bottom:8px;">
                     {status_label.upper()}
                 </span>
                 <table style="width: 100%; border-collapse: collapse; color:#eee;">
@@ -255,21 +269,19 @@ elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
                 </table>
             </div>
             """
-            
             folium.CircleMarker(
                 location=[row['Lat'], row['Lon']],
-                radius=8,
+                radius=6,
                 color='#ffffff',
-                weight=1.5,
-                fill_color='#cc3333' if warna_marker=='red' else ('#e67e22' if warna_marker=='orange' else '#27ae60'),
-                fill_opacity=0.85,
+                weight=1.0,
+                fill_color='#cc3333' if warna_pin=='red' else ('#e67e22' if warna_pin=='orange' else '#27ae60'),
+                fill_opacity=0.9,
                 popup=folium.Popup(html_popup, max_width=250)
             ).add_to(peta_all)
             
         components.html(peta_all._repr_html_(), height=620)
 
-elif st.session_state.current_page == "Analisis Kriging (Micro)":
-    # --- MODUL 2: DASHBOARD INTERPOLASI HARA (5 DESA INTI DIENG) ---
+elif st.session_state.current_page == "Analisis Kriging (Mikro)":
     st.markdown("<h1 style='font-weight: 300;'>Komputasi Ordinary Kriging (LOOCV)</h1>", unsafe_allow_html=True)
     st.sidebar.image("https://upload.wikimedia.org/wikipedia/id/thumb/0/03/Logo_Telkom_University_potrait.png/250px-Logo_Telkom_University_potrait.png", width=80)
     if st.sidebar.button("‹ Kembali ke Beranda", key="back_from_side", type="secondary", use_container_width=True):

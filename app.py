@@ -109,15 +109,19 @@ def load_suitability_all_data():
     path = 'Data_Sensor_1_91_All  .xlsx'
     if not os.path.exists(path): return None
     
+    # SOLUSI UTAMA: Menggunakan header=1 untuk melewati baris judul "PAGI" di Excel Anda
     try:
-        df = pd.read_excel(path, sheet_name='Data_All')
+        df = pd.read_excel(path, sheet_name='Data_All', header=1)
     except Exception as e:
-        return None
+        # Fallback jika baris judul tidak sengaja terhapus secara manual
+        try:
+            df = pd.read_excel(path, sheet_name='Data_All', header=0)
+        except:
+            return None
         
-    # Pembersihan spasi mental pada nama kolom
     df.columns = [str(c).strip() for c in df.columns]
     
-    # METODE RADIKAL FIX KEYERROR: Mencari kemiripan kata kunci tanpa peduli huruf besar/kecil maupun spasi
+    # Sinkronisasi nama kolom dinamis
     for c in df.columns:
         c_clean = c.lower().replace(" ", "")
         if 'titik' in c_clean or 'desa' in c_clean:
@@ -127,7 +131,7 @@ def load_suitability_all_data():
             
     df[['Desa', 'Lat', 'Lon']] = df[['Desa', 'Lat', 'Lon']].ffill()
     
-    # Deteksi otomatis kolom sensor yang ada di sheet Data_All
+    # Deteksi otomatis tipe data numerik parameter sensor
     kolom_sensor = ['Lat', 'Lon', 'Elevasi']
     for col in df.columns:
         if 's1' in col.lower() or 'ph' in col.lower() or 'n_' in col.lower() or 'p_' in col.lower() or 'k_' in col.lower():
@@ -160,7 +164,7 @@ if st.session_state.current_page == "Beranda Utama":
         if st.button("Jalankan Modul Kriging  ›", key="go_to_kriging", use_container_width=True):
             st.session_state.current_page = "Analisis Kriging (Mikro)"; st.rerun()
     with col3:
-        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">layers</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Zonasi Kesesuaian Lahan</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Visualisasi sebaran spasial mikro klasifikasi kesesuaian lahan hortikultura Pulau Jawa berdasarkan ekstraksi keputusan model ANN pada lembar data Data_All (12 sentra).</p></div>""", unsafe_allow_html=True)
+        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">layers</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Zonasi Kesesuaian Lahan</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Visualisasi sebaran spasial mikro klasifikasi kesesuaian lahan hortikultura Pulau Jawa berdasarkan keputusan model ANN pada lembar data Data_All (12 sentra).</p></div>""", unsafe_allow_html=True)
         if st.button("Lihat Kesesuaian Lahan ›", key="go_to_suitability", use_container_width=True):
             st.session_state.current_page = "Peta Kesesuaian Lahan Mikro"; st.rerun()
             
@@ -189,7 +193,7 @@ elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
     st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
     
     if df_suit_all is None or df_suit_all.empty:
-        st.error("Gagal mendeteksi berkas 'Data_Sensor_1_91_All  .xlsx' atau lembar data 'Data_All'.")
+        st.error("Gagal memproses lembar data 'Data_All'. Hubungkan file data di repositori.")
     else:
         center_lat = df_suit_all['Lat'].mean()
         center_lon = df_suit_all['Lon'].mean()
@@ -201,11 +205,11 @@ elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
             attr='Esri Satellite'
         )
         
-        # Penyelarasan pembacaan metrik nama kolom sensor secara dinamis
         def dapatkan_nilai_kolom(row, key_mencari):
             for col_real in row.index:
                 if key_mencari.lower() in col_real.lower():
-                    return float(row[col_real])
+                    try: return float(row[col_real])
+                    except: return 0.0
             return 0.0
 
         for _, row in df_suit_all.iterrows():

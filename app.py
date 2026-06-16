@@ -66,7 +66,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 4. CSS CONDITIONAL: DISMISS SIDEBAR PADA MODUL BERANDA, GIS, & KESESUAIAN ---
+# --- 4. CSS CONDITIONAL: SEMBUNYIKAN SIDEBAR PADA BERANDA, GIS, & MODUL KESESUAIAN ---
 if st.session_state.current_page in ["Beranda Utama", "Peta GIS Regional", "Peta Kesesuaian Lahan Mikro"]:
     st.markdown("""
         <style>
@@ -109,29 +109,37 @@ def load_suitability_all_data():
     path = 'Data_Sensor_1_91_All  .xlsx'
     if not os.path.exists(path): return None
     
-    # SOLUSI UTAMA: Menggunakan header=1 untuk melewati baris judul "PAGI" di Excel Anda
+    # Membaca tabel Sheet Data_All dengan melewati baris judul "PAGI"
     try:
         df = pd.read_excel(path, sheet_name='Data_All', header=1)
     except Exception as e:
-        # Fallback jika baris judul tidak sengaja terhapus secara manual
         try:
             df = pd.read_excel(path, sheet_name='Data_All', header=0)
         except:
             return None
         
+    # Pembersihan awal spasi putih pada string header
     df.columns = [str(c).strip() for c in df.columns]
     
-    # Sinkronisasi nama kolom dinamis
+    # MEMPERBAIKI KEYERROR: Membuat mapping dictionary baru secara permanen (inplace=True)
+    mapping_kolom_baru = {}
     for c in df.columns:
         c_clean = c.lower().replace(" ", "")
         if 'titik' in c_clean or 'desa' in c_clean:
-            df = df.rename(columns={c: 'Desa'})
-        if 'cocok' in c_clean or 'kesesuaian' in c_clean:
-            df = df.rename(columns={c: 'Kesesuaian'})
+            mapping_kolom_baru[c] = 'Desa'
+        elif 'cocok' in c_clean or 'kesesuaian' in c_clean:
+            mapping_kolom_baru[c] = 'Kessesuaian_Final'
+        elif 'lat' in c_clean:
+            mapping_kolom_baru[c] = 'Lat'
+        elif 'lon' in c_clean:
+            mapping_kolom_baru[c] = 'Lon'
             
+    df.rename(columns=mapping_kolom_baru, inplace=True)
+    
+    # Melakukan pengisian data baris kosong yang terlewat (ffill) secara aman
     df[['Desa', 'Lat', 'Lon']] = df[['Desa', 'Lat', 'Lon']].ffill()
     
-    # Deteksi otomatis tipe data numerik parameter sensor
+    # Deteksi otomatis tipe data parameter sensor hortikultura
     kolom_sensor = ['Lat', 'Lon', 'Elevasi']
     for col in df.columns:
         if 's1' in col.lower() or 'ph' in col.lower() or 'n_' in col.lower() or 'p_' in col.lower() or 'k_' in col.lower():
@@ -141,7 +149,7 @@ def load_suitability_all_data():
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
             
-    return df.dropna(subset=['Lat', 'Lon', 'Kesesuaian'])
+    return df.dropna(subset=['Lat', 'Lon', 'Kessesuaian_Final'])
 
 df_kriging = load_kriging_base_data()
 df_suit_all = load_suitability_all_data()
@@ -193,7 +201,7 @@ elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
     st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
     
     if df_suit_all is None or df_suit_all.empty:
-        st.error("Gagal memproses lembar data 'Data_All'. Hubungkan file data di repositori.")
+        st.error("Gagal mendeteksi data observasi kesesuaian lahan hortikultura.")
     else:
         center_lat = df_suit_all['Lat'].mean()
         center_lon = df_suit_all['Lon'].mean()
@@ -213,7 +221,7 @@ elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
             return 0.0
 
         for _, row in df_suit_all.iterrows():
-            status_label = str(row['Kesesuaian']).strip()
+            status_label = str(row['Kessesuaian_Final']).strip()
             
             if "tidak" in status_label.lower():
                 warna_marker = 'red'
@@ -259,7 +267,7 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
         st.session_state.current_page = "Beranda Utama"; st.rerun()
         
     st.sidebar.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
-    st.sidebar.markdown("### Parameter Komputasi")
+    st.sidebar.sidebar_markdown = "### Parameter Komputasi"
     parameter_terpilih = st.sidebar.selectbox("Variabel Nutrisi:", ["N", "P", "K", "PH"])
     opsi_desa = [f"{row['Desa']} ({row['Lat']:.5f}, {row['Lon']:.5f})" for _, row in df_kriging.iterrows()]
     pilihan_target = st.sidebar.selectbox("LOOCV Target Node:", opsi_desa)

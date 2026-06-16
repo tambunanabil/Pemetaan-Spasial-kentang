@@ -115,6 +115,8 @@ KOORDINAT_SENTRA = {
     'Linggarjati': [-7.19100, 108.12100]
 }
 
+DATA_ELEVASI_ASLI = {'Kepakisan': 1851, 'Bakal': 1693, 'Sikunang': 2110, 'Dieng Kulon': 2068, 'Karangtengah': 1541}
+
 @st.cache_data
 def load_kriging_base_data():
     path = 'Data_Kriging.xlsx'
@@ -125,31 +127,41 @@ def load_kriging_base_data():
         if 'titik' in c.lower() or 'desa' in c.lower():
             df = df.rename(columns={c: 'Desa'})
     df[['Desa', 'Lat', 'Lon']] = df[['Desa', 'Lat', 'Lon']].ffill()
+    if 'Elevasi' not in df.columns:
+        df['Elevasi'] = df['Desa'].map(DATA_ELEVASI_ASLI).fillna(1800)
     for col in ['Lat', 'Lon', 'N', 'P', 'K', 'PH', 'Elevasi']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     return df.groupby(['Desa', 'Lat', 'Lon']).mean(numeric_only=True).reset_index().dropna()
 
 @st.cache_data
 def load_suitability_all_data():
-    path = 'Data_Kesesuaian.xlsx'
-    if not os.path.exists(path): return None
-    
-    # Membaca file kesesuaian yang sudah dirapikan (Header langsung di Baris 1)
-    df = pd.read_excel(path)
+    # Sistem secara cerdas mendeteksi nama fail CSV atau Excel kesesuaian baru milikmu
+    nama_fail = 'Data_Kesesuaian.xlsx - sheet 1.csv'
+    if not os.path.exists(nama_fail):
+        nama_fail = 'Data_Kesesuaian.xlsx'
+        if not os.path.exists(nama_fail):
+            return None
+            
+    # Eksekusi fungsi pembacaan dinamis berbasis ekstensi fail asli
+    if nama_fail.endswith('.csv'):
+        df = pd.read_csv(nama_fail)
+    else:
+        df = pd.read_excel(nama_fail)
+        
     df.columns = [str(c).strip() for c in df.columns]
     
-    # Sinkronisasi kolom Desa dan Kecocokan
+    # Penyelarasan kolom Desa dan Kecocokan
     for c in df.columns:
         if 'desa' in c.lower() or 'titik' in c.lower(): df = df.rename(columns={c: 'Desa'})
         if 'cocok' in c.lower() or 'kesesuaian' in c.lower(): df = df.rename(columns={c: 'Kecocokan'})
             
     df['Desa'] = df['Desa'].ffill()
     
-    # Injeksi koordinat spasial berbasis kamus KOORDINAT_SENTRA
+    # Mapping koordinat spasial otomatis berbasis KOORDINAT_SENTRA
     df['Lat'] = df['Desa'].map(lambda x: KOORDINAT_SENTRA.get(str(x).strip(), [-7.5, 110.0])[0])
     df['Lon'] = df['Desa'].map(lambda x: KOORDINAT_SENTRA.get(str(x).strip(), [-7.5, 110.0])[1])
     
-    # Konversi data numerik pendukung sensor tanah
+    # Konversi numerik parameter sensor hara tanah hortikultura
     for col in ['EC_S1', 'N_S1', 'P_S1', 'K_S1', 'PH_S1', 'Moist_S1', 'Temp_D_S1', 'Elevasi', 'Produktivitas']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
@@ -175,9 +187,9 @@ if st.session_state.current_page == "Beranda Utama":
     with col2:
         st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">architecture</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Interpolasi Geostatistik</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Mesin komputasi menggunakan pemodelan matematika <i>Ordinary Kriging</i> univariat guna mengestimasi hara (N, P, K, pH) tak tersampel via LOOCV pada 5 desa inti Dieng.</p></div>""", unsafe_allow_html=True)
         if st.button("Jalankan Modul Kriging  ›", key="go_to_kriging", use_container_width=True):
-            st.session_state.current_page = "Analisis Kriging (Mikro)"; st.rerun()
+            st.session_state.current_page = "Analisis Kriging (Micro)"; st.rerun()
     with col3:
-        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">layers</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Zonasi Kesesuaian Lahan</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Visualisasi sebaran spasial mikro klasifikasi kesesuaian lahan hortikultura Pulau Jawa berdasarkan keputusan model ANN pada lembar data Data_Kesesuaian.</p></div>""", unsafe_allow_html=True)
+        st.markdown("""<div class='feature-card'><span class="material-symbols-outlined premium-icon">layers</span><h3 style='color: #d2e7b9; margin-top:0; font-weight: 400; font-size:1.3em;'>Zonasi Kesesuaian Lahan</h3><p style='font-size: 0.93em; color: #9ab098; text-align: justify; line-height:1.6;'>Visualisasi sebaran spasial mikro klasifikasi kesesuaian lahan hortikultura Pulau Jawa berdasarkan keputusan model ANN pada berkas Data_Kesesuaian.</p></div>""", unsafe_allow_html=True)
         if st.button("Lihat Kesesuaian Lahan ›", key="go_to_suitability", use_container_width=True):
             st.session_state.current_page = "Peta Kesesuaian Lahan Mikro"; st.rerun()
             
@@ -194,7 +206,7 @@ elif st.session_state.current_page == "Peta GIS Regional":
     components.html(f'<iframe src="https://arcg.is/1LDCjO4" width="100%" height="650" style="border: 1px solid rgba(163, 191, 162, 0.2); border-radius: 6px; box-shadow: 0px 8px 30px rgba(0,0,0,0.85);"></iframe>', height=680)
 
 elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
-    # --- MODUL 3: POINT MAP 12 SENTRA DARI FILE DATA_KESESUAIAN ---
+    # --- MODUL 3: SEBARAN MARKER SENTRA BERBASIS DATA_KESESUAIAN ---
     col1, col2 = st.columns([3, 1])
     with col1:
         st.markdown("<h1 style='font-weight: 300;'>Peta Sebaran Kesesuaian Lahan Mikro (12 Sentra)</h1>", unsafe_allow_html=True)
@@ -206,9 +218,8 @@ elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
     st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
     
     if df_suit_all is None or df_suit_all.empty:
-        st.error("Gagal memproses data kesesuaian hara.")
+        st.error("Gagal memproses berkas hara kesesuaian lahan hortikultura di repositori.")
     else:
-        # Kelompokkan data per desa untuk merata-ratakan nilai parameter sensor lapangan
         df_suit_group = df_suit_all.groupby(['Desa', 'Lat', 'Lon', 'Kecocokan']).mean(numeric_only=True).reset_index()
         
         peta_all = folium.Map(
@@ -257,7 +268,7 @@ elif st.session_state.current_page == "Peta Kesesuaian Lahan Mikro":
             
         components.html(peta_all._repr_html_(), height=620)
 
-elif st.session_state.current_page == "Analisis Kriging (Mikro)":
+elif st.session_state.current_page == "Analisis Kriging (Micro)":
     # --- MODUL 2: DASHBOARD INTERPOLASI HARA (5 DESA INTI DIENG) ---
     st.markdown("<h1 style='font-weight: 300;'>Komputasi Ordinary Kriging (LOOCV)</h1>", unsafe_allow_html=True)
     st.sidebar.image("https://upload.wikimedia.org/wikipedia/id/thumb/0/03/Logo_Telkom_University_potrait.png/250px-Logo_Telkom_University_potrait.png", width=80)

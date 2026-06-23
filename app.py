@@ -227,7 +227,7 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
             attr='Esri Topographic Map'
         )
         
-        # 1. Plotting Titik Uji Target (Menggunakan Pin Lokasi Elegan Orisinal, Bukan Bintang AI)
+        # 1. Plotting Titik Uji Target (Menggunakan Pin Lokasi Elegan Orisinal)
         warna_target_cud = dapatkan_warna_cud(status_aktual_target)
         folium.Marker(
             [t_lat, t_lon], 
@@ -241,7 +241,7 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
             icon=folium.Icon(color='red', icon='location', prefix='fa')
         ).add_to(peta_lahan)
         
-        # 2. Plotting Titik Referensi Acuan (Mengembalikan Pop-up Tabel Parameter Lengkap)
+        # 2. Plotting Titik Referensi Acuan (Pop-up Tabel Parameter Lengkap)
         for _, row in df_kriging_unique.iterrows():
             r_lat, r_lon = float(row['Lat']), float(row['Lon'])
             if r_lat == t_lat and r_lon == t_lon:
@@ -356,4 +356,4 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
             else: 
                 st.error(status_hitung)
         else: 
-            st.info("Sistem Siaga. Silakan tentukan variabel nutrisi dan target node di sidebar, lalu klik 'Hitung Estimasi Spasial' untuk memulai kalkulasi dan memunculkan hasil inferensi kesesuaian lahan.")
+            st.info("Silakan tentukan variabel nutrisi dan target node di sidebar, lalu klik 'Hitung Estimasi Spasial' untuk memulai kalkulasi dan memunculkan hasil inferensi kesesuaian lahan.")

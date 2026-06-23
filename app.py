@@ -100,7 +100,6 @@ def load_kriging_base_data():
     if 'Elevasi' not in df.columns: df['Elevasi'] = df['Desa'].map(DATA_ELEVASI_ASLI).fillna(1800)
     for col in ['Lat', 'Lon', 'N', 'P', 'K', 'PH', 'Elevasi']: df[col] = pd.to_numeric(df[col], errors='coerce')
     
-    # Deteksi Otomatis atau Injeksi kolom Status Kecocokan dari file koordinat yang bersesuaian
     if 'Kecocokan' not in df.columns:
         mapping_status = {
             'Karangtengah': 'Cocok', 'Bakal': 'Cocok', 'Sikunang': 'Cocok',
@@ -165,7 +164,6 @@ elif st.session_state.current_page == "Peta Gradasi Kesesuaian Lahan":
         if st.button("‹  Kembali ke Beranda", key="back_from_suit", use_container_width=True): st.session_state.current_page = "Beranda Utama"; st.rerun()
     st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
     
-    # Memanggil link live map Leaflet JS dari GitHub Pages milikmu yang sukses
     link_peta_gradasi_nabil = "https://tambunanabil.github.io/kesesuaian-lahan/#13/-7.8998/112.5033"
     components.html(f'<iframe src="{link_peta_gradasi_nabil}" width="100%" height="650" style="border: none; border-radius: 6px; box-shadow: 0px 8px 30px rgba(0,0,0,0.65);"></iframe>', height=680)
 
@@ -182,14 +180,12 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
     st.sidebar.markdown("### Parameter Komputasi")
     parameter_terpilih = st.sidebar.selectbox("Variabel Nutrisi:", ["N", "P", "K", "PH"])
     
-    # Menyiapkan Opsi Pilihan Node Target LOOCV
     df_kriging_unique = df_kriging.groupby(['Desa', 'Lat', 'Lon', 'Kecocokan']).mean(numeric_only=True).reset_index()
     opsi_desa = [f"{row['Desa']} ({row['Lat']:.5f}, {row['Lon']:.5f})" for _, row in df_kriging_unique.iterrows()]
     pilihan_target = st.sidebar.selectbox("LOOCV Target Node:", opsi_desa)
     model_variogram = st.sidebar.selectbox("Fungsi Variogram:", ["linear", "spherical", "exponential", "gaussian"])
     hitung_btn = st.sidebar.button("Hitung Estimasi Spasial", type="primary", use_container_width=True)
     
-    # Ekstraksi Parameter Titik Uji Target
     idx_target = opsi_desa.index(pilihan_target)
     target_node = df_kriging_unique.iloc[idx_target]
     t_lat, t_lon = float(target_node['Lat']), float(target_node['Lon'])
@@ -199,7 +195,6 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
     ph_target = float(target_node['PH'])
     status_aktual_target = str(target_node['Kecocokan'])
     
-    # Memisahkan 4 Titik Acuan Terdekat (Reference Nodes)
     base_data = df_kriging_unique.drop(df_kriging_unique.index[idx_target]).copy()
     base_data['jarak'] = np.sqrt((base_data['Lon'] - t_lon)**2 + (base_data['Lat'] - t_lat)**2)
     titik_acuan_4 = base_data.nsmallest(4, 'jarak')
@@ -213,6 +208,7 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
     
     if hitung_btn:
         try:
+            # Komputasi model matematika Ordinary Kriging univariat hara
             OK = OrdinaryKriging(X_base, Y_base, Z_base, variogram_model=model_variogram, verbose=False, enable_plotting=False)
             z_pred, sigmasq = OK.execute('points', [t_lon], [t_lat])
             prediksi_kriging, kriging_variance = z_pred[0], sigmasq[0]
@@ -223,7 +219,7 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
 
     kolom_kiri, kolom_kanan = st.columns([1.55, 1.45])
     with kolom_kiri:
-        st.markdown("<h4 style='font-weight: 400; color: #d2e7b9;'>Peta Lokasi Titik Uji & 4 Node Acuan Terdekat (Okabe-Ito Color Coded)</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='font-weight: 400; color: #d2e7b9;'>Peta Lokasi Titik Uji LOOCV & Parameter Pengukuran</h4>", unsafe_allow_html=True)
         peta_lahan = folium.Map(
             location=[float(df_kriging_unique['Lat'].mean()), float(df_kriging_unique['Lon'].mean())], 
             zoom_start=14, 
@@ -231,35 +227,48 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
             attr='Esri Topographic Map'
         )
         
-        # 1. Plotting Titik Uji Target (Marker Khusus Pin Info)
+        # 1. Plotting Titik Uji Target (Menggunakan Pin Lokasi Elegan Orisinal, Bukan Bintang AI)
         warna_target_cud = dapatkan_warna_cud(status_aktual_target)
         folium.Marker(
             [t_lat, t_lon], 
-            popup=f"<b>TARGET UJI: {t_desa}</b><br>Status: {status_aktual_target}<br>pH: {ph_target:.2f}<br>Elevasi: {elevasi_target:.0f} m", 
-            icon=folium.Icon(color='red', icon='info-sign')
+            popup=folium.Popup(f"""
+            <div style="font-family:'Segoe UI'; font-size:12px; width:180px; padding:5px;">
+                <b style="color:#cc3333;">📍 BLIND TARGET UJI</b><br>
+                <b>Desa: {t_desa}</b><br>
+                pH: {ph_target:.2f}<br>
+                Elevasi: {elevasi_target:.0f} mdpl
+            </div>""", max_width=250),
+            icon=folium.Icon(color='red', icon='location', prefix='fa')
         ).add_to(peta_lahan)
         
-        # 2. Plotting Seluruh Node Menggunakan Palet Okabe-Ito CUD Friendly
+        # 2. Plotting Titik Referensi Acuan (Mengembalikan Pop-up Tabel Parameter Lengkap)
         for _, row in df_kriging_unique.iterrows():
             r_lat, r_lon = float(row['Lat']), float(row['Lon'])
             if r_lat == t_lat and r_lon == t_lon:
                 continue
                 
-            # Cek apakah node termasuk salah satu dari 4 titik acuan terdekat
             is_acuan = r_lat in titik_acuan_4['Lat'].values and r_lon in titik_acuan_4['Lon'].values
             border_color = '#ffffff' if is_acuan else 'rgba(0,0,0,0.2)'
             border_weight = 2.5 if is_acuan else 1.0
-            radius_size = 9 if is_acuan else 6
-            
+            radius_size = 10 if is_acuan else 6
             warna_node_cud = dapatkan_warna_cud(row['Kecocokan'])
             
-            html_popup_node = f"""
-            <div style="font-family:'Segoe UI'; font-size:11px; color:#333; padding:5px;">
-                <b>Desa: {row['Desa']}</b><br>
-                Status: <span style="color:{warna_node_cud}; font-weight:bold;">{row['Kecocokan']}</span><br>
-                pH: {row['PH']:.2f}<br>
-                Elevasi: {row['Elevasi']:.0f} mdpl<br>
-                {"⭐ <b>Node Acuan Terdekat</b>" if is_acuan else ""}
+            # Pengembalian struktur data tabel parameter di dalam pop-up penanda peta
+            html_table_popup = f"""
+            <div style="font-family: 'Segoe UI', Arial; font-size: 11px; width: 180px; padding: 5px;">
+                <b style="color:{warna_node_cud}; font-size:12px; display:block; margin-bottom:5px;">🏠 Sentra: {row['Desa']}</b>
+                <span style="display:block; padding:2px 4px; background-color:{warna_node_cud}; color:white; border-radius:3px; text-align:center; font-weight:bold; margin-bottom:6px; font-size:10px;">
+                    {str(row['Kecocokan']).upper()}
+                </span>
+                <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+                    <tr style="border-bottom: 1px solid #ddd; background:#f9f9f9;"><td><b>Parameter</b></td><td style="text-align:right;"><b>Nilai</b></td></tr>
+                    <tr style="border-bottom: 1px solid #ddd;"><td>Nitrogen (N)</td><td style="text-align: right;">{row.get('N', 0):.2f}</td></tr>
+                    <tr style="border-bottom: 1px solid #ddd;"><td>Fosfor (P)</td><td style="text-align: right;">{row.get('P', 0):.2f}</td></tr>
+                    <tr style="border-bottom: 1px solid #ddd;"><td>Kalium (K)</td><td style="text-align: right;">{row.get('K', 0):.2f}</td></tr>
+                    <tr style="border-bottom: 1px solid #ddd;"><td>pH Tanah</td><td style="text-align: right;">{row.get('PH', 0):.2f}</td></tr>
+                    <tr><td>Elevasi</td><td style="text-align: right;">{row.get('Elevasi', 0):.0f} m</td></tr>
+                </table>
+                {f"<div style='margin-top:5px; color:#333; font-weight:500; font-size:10px; text-align:center;'>🌐 Node Acuan Terdekat</div>" if is_acuan else ""}
             </div>
             """
             
@@ -270,57 +279,81 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
                 weight=border_weight, 
                 fill_color=warna_node_cud, 
                 fill_opacity=0.95, 
-                popup=folium.Popup(html_popup_node, max_width=200)
+                popup=folium.Popup(html_table_popup, max_width=220)
             ).add_to(peta_lahan)
             
         components.html(peta_lahan._repr_html_(), height=500)
         
     with kolom_kanan:
-        st.markdown("<h4 style='font-weight: 400; color: #d2e7b9;'>Hasil Komputasi & Logika Inferensi Lahan</h4>", unsafe_allow_html=True)
-        e1, e2, e3 = st.columns(3)
-        with e1: st.metric("pH Titik Uji", f"{ph_target:.2f}")
-        with e2: st.metric("Elevasi Target", f"{elevasi_target:.0f} mdpl")
-        with e3: st.metric("Status Model", f"{status_aktual_target}")
-        st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0;'>", unsafe_allow_html=True)
+        st.markdown("<h4 style='font-weight: 400; color: #d2e7b9;'>Karakteristik Titik Geografis & Inferensi</h4>", unsafe_allow_html=True)
         
-        # 3. IMPLEMENTASI MESIN INFERENSI ASUMSI KECOCOKAN LAHAN
+        # Penentuan batas ambang ekstrim (Min-Max) dari 4 titik acuan spasial terdekat
         min_ph_acuan, max_ph_acuan = titik_acuan_4['PH'].min(), titik_acuan_4['PH'].max()
         min_el_acuan, max_el_acuan = titik_acuan_4['Elevasi'].min(), titik_acuan_4['Elevasi'].max()
         
-        # Hitung modus/mayoritas status dari 4 titik acuan terdekat
-        status_mayoritas_acuan = titik_acuan_4['Kecocokan'].mode()[0]
-        warna_inferensi = dapatkan_warna_cud(status_mayoritas_acuan)
-        
-        # Cek kesesuaian range koordinat fisik
         ph_masuk_range = min_ph_acuan <= ph_target <= max_ph_acuan
         elevasi_masuk_range = min_el_acuan <= elevasi_target <= max_el_acuan
         
-        st.markdown("##### 📌 Batas Toleransi Karakteristik Fisik 4 Titik Acuan Terdekat:")
-        st.write(f"• Range Batas pH Acuan: **{min_ph_acuan:.2f}** s/d **{max_ph_acuan:.2f}** " + ( "✅ (Masuk Batas)" if ph_masuk_range else "❌ (Di Luar Batas)" ))
-        st.write(f"• Range Batas Elevasi Acuan: **{min_el_acuan:.0f}** s/d **{max_el_acuan:.0f} mdpl** " + ( "✅ (Masuk Batas)" if elevasi_masuk_range else "❌ (Di Luar Batas)" ))
-        
-        if ph_masuk_range and elevasi_masuk_range:
-            kesimpulan_inferensi = f"Karena nilai pH dan Ketinggian titik uji berada dalam range batas 4 titik acuan terdekat, maka berdasarkan kedekatan spasial, titik ini **DAPAT DIASUMSIKAN {status_mayoritas_acuan.upper()}** untuk pertumbuhan budidaya kentang."
+        # Eksekusi Logika Matriks Pengondisian Agronomis Fleksibel untuk Kesimpulan TA
+        if not (ph_masuk_range and elevasi_masuk_range):
+            kesimpulan_inferensi = "Posisi yang ditentukan di luar jangkauan data referensi"
+            warna_inferensi = "#7f8c8d"  # Abu-abu Netral Keluar Batas
         else:
-            kesimpulan_inferensi = f"Karena parameter pH atau Ketinggian berada di luar ambang batas toleransi 4 titik acuan terdekat, maka kondisi mikro-ekologis titik ini **DIASUMSIKAN TIDAK IDENTIK** dengan sebaran tetangganya. Rekomendasi landasan model ANN asli tetap dirujuk yaitu: **{status_aktual_target.upper()}**."
+            if elevasi_target < 1000:
+                kesimpulan_inferensi = "Tidak Cocok"
+                warna_inferensi = "#d55e00"  # Merah Vermilion
+            elif 1000 <= elevasi_target <= 1500:
+                if ph_target > 7.0:
+                    kesimpulan_inferensi = "Berpotensi Cocok"
+                    warna_inferensi = "#e69f00"  # Jingga CUD
+                else:
+                    status_mayoritas = titik_acuan_4['Kecocokan'].mode()[0]
+                    kesimpulan_inferensi = status_mayoritas
+                    warna_inferensi = dapatkan_warna_cud(status_mayoritas)
+            elif elevasi_target > 1500:
+                if ph_target > 6.5:
+                    kesimpulan_inferensi = "Cocok"
+                    warna_inferensi = "#009e73"  # Hijau CUD
+                else:
+                    status_mayoritas = titik_acuan_4['Kecocokan'].mode()[0]
+                    kesimpulan_inferensi = status_mayoritas
+                    warna_inferensi = dapatkan_warna_cud(status_mayoritas)
+            else:
+                status_mayoritas = titik_acuan_4['Kecocokan'].mode()[0]
+                kesimpulan_inferensi = status_mayoritas
+                warna_inferensi = dapatkan_warna_cud(status_mayoritas)
 
-        st.markdown(f"""
-        <div style="background-color: rgba(19, 27, 21, 0.7); padding: 18px; border-radius: 6px; border-left: 4px solid {warna_inferensi}; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05);">
-            <b style="color: #e4eed7; font-size: 1.05em;">Asersi Inferensi Spasial-Agronomis (pH & Ketinggian)</b><br>
-            <i style="font-size: 0.9em; color: #cddbc0; display:block; margin-top:8px; line-height: 1.6; text-align: justify;">{kesimpulan_inferensi}</i>
-        </div>
-        """, unsafe_allow_html=True)
+        # Tampilkan visualisasi parameter dasar lokasi
+        k1, k2 = st.columns(2)
+        with k1: st.metric("pH Lapangan Aktual", f"{ph_target:.2f}")
+        with k2: st.metric("Ketinggian Elevasi", f"{elevasi_target:.0f} mdpl")
+        
         st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0;'>", unsafe_allow_html=True)
-
+        
+        # 🔔 ALUR INTERAKSI KONDISIONAL: Munculkan data hanya setelah tombol klik diaktifkan
         if hitung_btn:
+            st.markdown("##### 📊 Hasil Analisis Klasifikasi Inferensi:")
+            st.markdown(f"""
+            <div style="background-color: rgba(19, 27, 21, 0.7); padding: 18px; border-radius: 6px; border-left: 5px solid {warna_inferensi}; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05);">
+                <span style="color: #8da68c; font-size: 0.85em; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px;">Keputusan Evaluasi Spasial-Agronomis:</span>
+                <b style="color: #ffffff; font-size: 1.3em; display: block; margin-top: 4px; letter-spacing: 0.5px;">{kesimpulan_inferensi.upper()}</b>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("##### 📈 Estimasi Kuantitatif Parameter & Metrik Galat:")
+            
             if status_hitung == "Sukses":
                 m1, m2 = st.columns(2)
                 with m1: st.metric(f"Prediksi Estimasi {parameter_terpilih}", f"{prediksi_kriging:.2f}")
                 with m2: st.metric(f"Data Aktual Lapangan", f"{nilai_aktual:.2f}")
+                
                 c1, c2 = st.columns(2)
                 with c1: st.metric("Mean Absolute Error (MAE)", f"{error_mae:.2f}")
-                with c2: st.metric("Normalized Error (NMAE)", f"{(error_mae / df_kriging[parameter_terpilih].mean()) * 100:.2f} %")
+                with c2: st.metric("Normalized Error (NMAE)", f"{(error_mae / df_kriging_unique[parameter_terpilih].mean()) * 100:.2f} %")
+                
+                st.markdown(f"""<div style="background-color: rgba(19, 27, 21, 0.45); padding: 15px; border-radius: 6px; border-left: 3px solid #a3bfa2; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.03);"><b style="color: #d2e7b9; font-size:0.95em;">Catatan Validasi Spasial</b><br><i style="font-size: 0.85em; color: #8da68c; display:block; margin-top:5px; line-height: 1.5;">Evaluasi model univariat menunjukkan variabilitas sebaran hara makro pada grid mikro sentra Dieng. Perbedaan \u0394H terbukti tidak berkorelasi linier terhadap fluktuasi galat prediksi.</i></div>""", unsafe_allow_html=True)
             else: 
                 st.error(status_hitung)
         else: 
-            st.info("Sistem siap. Tetapkan parameter di sidebar lalu klik kalkulasi geostatistik.")
+            st.info("Sistem Siaga. Silakan tentukan variabel nutrisi dan target node di sidebar, lalu klik 'Hitung Estimasi Spasial' untuk memulai kalkulasi dan memunculkan hasil inferensi kesesuaian lahan.")

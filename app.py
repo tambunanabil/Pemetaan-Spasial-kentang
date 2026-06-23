@@ -330,58 +330,47 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
             
         components.html(peta_lahan._repr_html_(), height=450)
 
-        # TABEL PARAMETER 
+       # TABEL PARAMETER (Dipindah ke Kolom Kiri di Bawah Peta agar ruang termanfaatkan maksimal)
         if hitung_btn and status_hitung == "Sukses":
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("<h5 style='font-weight: 400; color: #d2e7b9;'>Detail Parameter Geostatistik</h5>", unsafe_allow_html=True)
             
-            df_tabel = titik_acuan_4[['Desa', 'Lat', 'Lon', 'Elevasi', 'PH', parameter_terpilih, 'Kecocokan']].copy()
-            df_tabel['Peran'] = 'Acuan'
+            # Membuat list of dict agar terhindar dari error duplikasi nama kolom (InvalidIndexError)
+            tabel_data = []
             
-            df_target = pd.DataFrame([{
-                'Desa': f"Target: {t_desa}", 'Lat': t_lat, 'Lon': t_lon, 'Elevasi': elevasi_target, 
-                'PH': ph_target, parameter_terpilih: round(prediksi_kriging, 2), 
-                'Kecocokan': kesimpulan_inferensi.title(), 'Peran': 'Uji'
-            }])
+            # 1. Baris Target (Titik Uji)
+            row_target = {
+                'Desa': f"Target: {t_desa}",
+                'Peran': 'Uji',
+                'Elevasi': elevasi_target,
+                'PH (Aktual)': ph_target,
+            }
+            # Jika parameter yang dipilih bukan PH, tambahkan kolom aktual untuk parameter tsb
+            if parameter_terpilih != 'PH':
+                row_target[f"{parameter_terpilih} (Aktual)"] = nilai_aktual
             
-            df_gabungan = pd.concat([df_target, df_tabel], ignore_index=True)
-            df_gabungan.rename(columns={parameter_terpilih: f"Prediksi {parameter_terpilih}"}, inplace=True)
+            # Tambahkan kolom prediksi dan kecocokan
+            row_target[f"Prediksi {parameter_terpilih}"] = round(prediksi_kriging, 2)
+            row_target['Kecocokan'] = kesimpulan_inferensi.title()
+            tabel_data.append(row_target)
             
+            # 2. Baris Acuan (Nearest Neighbors)
+            for _, row in titik_acuan_4.iterrows():
+                row_acuan = {
+                    'Desa': row['Desa'],
+                    'Peran': 'Acuan',
+                    'Elevasi': row['Elevasi'],
+                    'PH (Aktual)': row['PH'],
+                }
+                # Jika parameter yang dipilih bukan PH, tambahkan kolom aktual untuk parameter tsb
+                if parameter_terpilih != 'PH':
+                    row_acuan[f"{parameter_terpilih} (Aktual)"] = row[parameter_terpilih]
+                    
+                # Titik acuan tidak memiliki prediksi, jadi kita beri tanda strip
+                row_acuan[f"Prediksi {parameter_terpilih}"] = "-"
+                row_acuan['Kecocokan'] = str(row['Kecocokan']).title()
+                tabel_data.append(row_acuan)
+                
+            # Konversi ke DataFrame dan tampilkan
+            df_gabungan = pd.DataFrame(tabel_data)
             st.dataframe(df_gabungan, use_container_width=True, hide_index=True)
-
-    with kolom_kanan:
-        st.markdown("<h4 style='font-weight: 400; color: #d2e7b9; letter-spacing: 0.5px;'>Karakteristik Titik & Inferensi</h4>", unsafe_allow_html=True)
-        
-        k1, k2 = st.columns(2)
-        with k1: st.metric("pH Lapangan Aktual", f"{ph_target:.2f}")
-        with k2: st.metric("Ketinggian Elevasi", f"{elevasi_target:.0f} mdpl")
-        
-        st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0;'>", unsafe_allow_html=True)
-        
-        if hitung_btn:
-            st.markdown("<h5 style='font-weight: 400; color: #d2e7b9;'>Analisis Klasifikasi Inferensi</h5>", unsafe_allow_html=True)
-            st.markdown(f"""
-            <div style="background-color: rgba(19, 27, 21, 0.7); padding: 18px; border-radius: 6px; border-left: 5px solid {warna_inferensi}; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05);">
-                <span style="color: #8da68c; font-size: 0.85em; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px;">Keputusan Evaluasi Lahan:</span>
-                <b style="color: {warna_inferensi}; font-size: 1.3em; display: block; margin-top: 4px; letter-spacing: 0.5px;">{kesimpulan_inferensi.upper()}</b>
-                <i style="font-size: 0.88em; color: #cddbc0; display:block; margin-top:8px; line-height: 1.5; text-align: justify;">{keterangan_logika}</i>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("<h5 style='font-weight: 400; color: #d2e7b9;'>Estimasi Kuantitatif & Metrik</h5>", unsafe_allow_html=True)
-            
-            if status_hitung == "Sukses":
-                m1, m2 = st.columns(2)
-                with m1: st.metric(f"Prediksi Estimasi {parameter_terpilih}", f"{prediksi_kriging:.2f}")
-                with m2: st.metric(f"Data Aktual Lapangan", f"{nilai_aktual:.2f}")
-                
-                c1, c2 = st.columns(2)
-                with c1: st.metric("Mean Absolute Error (MAE)", f"{error_mae:.2f}")
-                with c2: st.metric("Normalized Error (NMAE)", f"{(error_mae / df_kriging_unique[parameter_terpilih].mean()) * 100:.2f} %")
-                
-                st.markdown(f"""<div style="background-color: rgba(19, 27, 21, 0.45); padding: 15px; border-radius: 6px; border-left: 3px solid #a3bfa2; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.03);"><b style="color: #d2e7b9; font-size:0.95em;">Catatan Validasi Spasial</b><br><i style="font-size: 0.85em; color: #8da68c; display:block; margin-top:5px; line-height: 1.5;">Evaluasi model univariat menunjukkan variabilitas sebaran hara makro pada grid mikro sentra Dieng. Perbedaan Elevasi terbukti tidak berkorelasi linier terhadap fluktuasi galat prediksi.</i></div>""", unsafe_allow_html=True)
-            else: 
-                st.error(status_hitung)
-        else: 
-            st.info("Silakan tentukan variabel nutrisi dan target node di panel sebelah kiri, lalu klik 'Hitung Estimasi Spasial' untuk memulai kalkulasi.")

@@ -193,7 +193,6 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
     X_base, Y_base, Z_base = base_data['Lon'].values, base_data['Lat'].values, base_data[parameter_terpilih].values
     elevasi_ref_rata = base_data['Elevasi'].mean()
     
-    # Pre-calculate Inferensi Logika Agronomi
     min_ph_acuan, max_ph_acuan = titik_acuan_4['PH'].min(), titik_acuan_4['PH'].max()
     min_el_acuan, max_el_acuan = titik_acuan_4['Elevasi'].min(), titik_acuan_4['Elevasi'].max()
     ph_masuk_range = min_ph_acuan <= ph_target <= max_ph_acuan
@@ -246,7 +245,6 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
         except Exception as e:
             status_hitung = f"Galat: {e}"
 
-    # Mengubah rasio agar tabel bisa melebar optimal dan map tetap proporsional
     kolom_kiri, kolom_kanan = st.columns([1.65, 1.35])
     
     with kolom_kiri:
@@ -310,28 +308,32 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
                 popup=folium.Popup(html_table_popup, max_width=220)
             ).add_to(peta_lahan)
             
-        components.html(peta_lahan._repr_html_(), height=420)
+        components.html(peta_lahan._repr_html_(), height=450)
 
-        # TABEL PARAMETER HTML CUSTOM: Besar, Rapat ke atas, Profesional, Fokus ke Aktual vs Prediksi
+        # =========================================================================
+        # TABEL PARAMETER HTML CUSTOM TERBARU (MENAMPILKAN SEMUA PARAMETER N, P, K, pH)
+        # =========================================================================
         if hitung_btn and status_hitung == "Sukses":
-            st.markdown(f"<h5 style='font-weight: 400; color: #d2e7b9; margin-top: -20px;'>Data Parameter: {parameter_terpilih}</h5>", unsafe_allow_html=True)
+            st.markdown(f"<h5 style='font-weight: 400; color: #d2e7b9; margin-top: -20px;'>Profil Lengkap Parameter Agronomi</h5>", unsafe_allow_html=True)
             
             html_table = f"""
             <table style="width: 100%; border-collapse: collapse; text-align: center; color: #e4eed7; background-color: rgba(19, 27, 21, 0.6); border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
                 <tr style="background-color: rgba(163, 191, 162, 0.15); color: #cddbc0; border-bottom: 1px solid rgba(255,255,255,0.1);">
                     <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">Sentra (Desa)</th>
                     <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">Peran Spasial</th>
-                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">Lat</th>
-                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">Lon</th>
-                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">{parameter_terpilih} (Aktual)</th>
-                    <th style="padding: 12px 10px; font-weight: 600; font-size: 1.05em; color: #e69f00;">{parameter_terpilih} (Prediksi)</th>
+                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">N</th>
+                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">P</th>
+                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">K</th>
+                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">pH</th>
+                    <th style="padding: 12px 10px; font-weight: 600; font-size: 1.05em; color: #e69f00;">Prediksi {parameter_terpilih}</th>
                 </tr>
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); background-color: rgba(213, 94, 0, 0.15);">
                     <td style="padding: 12px 10px; font-weight: bold; color:#cc3333;">{t_desa}</td>
                     <td style="padding: 12px 10px; font-weight: bold; color:#cc3333;">Titik Uji</td>
-                    <td style="padding: 12px 10px;">{t_lat:.5f}</td>
-                    <td style="padding: 12px 10px;">{t_lon:.5f}</td>
-                    <td style="padding: 12px 10px; font-weight: 500;">{nilai_aktual:.2f}</td>
+                    <td style="padding: 12px 10px;">{target_node['N']:.2f}</td>
+                    <td style="padding: 12px 10px;">{target_node['P']:.2f}</td>
+                    <td style="padding: 12px 10px;">{target_node['K']:.2f}</td>
+                    <td style="padding: 12px 10px;">{target_node['PH']:.2f}</td>
                     <td style="padding: 12px 10px; font-weight: bold; font-size: 1.15em; color: #e69f00;">{prediksi_kriging:.2f}</td>
                 </tr>
             """
@@ -341,9 +343,10 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                     <td style="padding: 12px 10px;">{row['Desa']}</td>
                     <td style="padding: 12px 10px; color:#8da68c;">Titik Acuan</td>
-                    <td style="padding: 12px 10px;">{row['Lat']:.5f}</td>
-                    <td style="padding: 12px 10px;">{row['Lon']:.5f}</td>
-                    <td style="padding: 12px 10px;">{row[parameter_terpilih]:.2f}</td>
+                    <td style="padding: 12px 10px;">{row['N']:.2f}</td>
+                    <td style="padding: 12px 10px;">{row['P']:.2f}</td>
+                    <td style="padding: 12px 10px;">{row['K']:.2f}</td>
+                    <td style="padding: 12px 10px;">{row['PH']:.2f}</td>
                     <td style="padding: 12px 10px; color:#5b6b5c;">-</td>
                 </tr>
                 """

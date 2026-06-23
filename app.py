@@ -63,6 +63,11 @@ st.markdown(f"""
         padding-bottom: 4rem !important;
         max-width: 90% !important;
     }}
+    /* Style untuk styling dataframe Streamlit */
+    [data-testid="stDataFrame"] {{
+        background-color: rgba(19, 27, 21, 0.6);
+        border-radius: 6px;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -85,7 +90,7 @@ else:
         </style>
     """, unsafe_allow_html=True)
 
-# --- 5. UNIFIED DATA READING ENGINE (Membaca Data Excel Secara Cerdas) ---
+# --- 5. UNIFIED DATA READING ENGINE ---
 DATA_ELEVASI_ASLI = {'Kepakisan': 1851, 'Bakal': 1693, 'Sikunang': 2110, 'Dieng Kulon': 2068, 'Karangtengah': 1541}
 
 @st.cache_data
@@ -100,24 +105,20 @@ def load_kriging_base_data():
     if 'Elevasi' not in df.columns: df['Elevasi'] = df['Desa'].map(DATA_ELEVASI_ASLI).fillna(1800)
     for col in ['Lat', 'Lon', 'N', 'P', 'K', 'PH', 'Elevasi']: df[col] = pd.to_numeric(df[col], errors='coerce')
     
+    # KOREKSI: Mengatur seluruh data 5 sentra asli menjadi "Cocok" sesuai fakta lapangan
     if 'Kecocokan' not in df.columns:
-        mapping_status = {
-            'Karangtengah': 'Cocok', 'Bakal': 'Cocok', 'Sikunang': 'Cocok',
-            'Kepakisan': 'Tidak Sesuai', 'Dieng Kulon': 'Netral'
-        }
-        df['Kecocokan'] = df['Desa'].map(mapping_status).fillna('Netral')
+        df['Kecocokan'] = 'Cocok'
         
     return df.dropna(subset=['Lat', 'Lon', 'Desa'])
 
 df_kriging = load_kriging_base_data()
 
-# PALET WARNA OKABE-ITO (Color Universal Design - CUD Friendly)
 def dapatkan_warna_cud(status):
     lbl = str(status).lower().strip()
     if 'tidak' in lbl or 'kurang' in lbl:
-        return '#d55e00'  # Merah Vermilion (Tidak Sesuai)
+        return '#d55e00'  # Merah Vermilion
     elif 'netral' in lbl:
-        return '#e69f00'  # Jingga Terang (Netral)
+        return '#e69f00'  # Jingga Terang
     return '#009e73'      # Hijau Kebiruan (Cocok)
 
 # --- 6. INTERACTIVE ROUTING CONTROLLER ---
@@ -201,14 +202,12 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
     
     X_base, Y_base, Z_base = base_data['Lon'].values, base_data['Lat'].values, base_data[parameter_terpilih].values
     elevasi_ref_rata = base_data['Elevasi'].mean()
-    delta_elevasi = abs(elevasi_target - elevasi_ref_rata)
     
     prediksi_kriging, kriging_variance, error_mae = 0.0, 0.0, 0.0
     status_hitung = ""
     
     if hitung_btn:
         try:
-            # Komputasi model matematika Ordinary Kriging univariat hara
             OK = OrdinaryKriging(X_base, Y_base, Z_base, variogram_model=model_variogram, verbose=False, enable_plotting=False)
             z_pred, sigmasq = OK.execute('points', [t_lon], [t_lat])
             prediksi_kriging, kriging_variance = z_pred[0], sigmasq[0]
@@ -284,7 +283,6 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
     with kolom_kanan:
         st.markdown("<h4 style='font-weight: 400; color: #d2e7b9;'>Karakteristik Titik Geografis & Inferensi</h4>", unsafe_allow_html=True)
         
-        # Penentuan batas ambang ekstrim (Min-Max) dari 4 titik acuan spasial terdekat
         min_ph_acuan, max_ph_acuan = titik_acuan_4['PH'].min(), titik_acuan_4['PH'].max()
         min_el_acuan, max_el_acuan = titik_acuan_4['Elevasi'].min(), titik_acuan_4['Elevasi'].max()
         
@@ -292,41 +290,44 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
         elevasi_masuk_range = min_el_acuan <= elevasi_target <= max_el_acuan
         
         status_mayoritas = titik_acuan_4['Kecocokan'].mode()[0]
+        status_unik = titik_acuan_4['Kecocokan'].str.lower().unique()
 
         # =========================================================================
-        # 🧠 MESIN INFERENSI BARU: Prioritas Spasial (Range) -> Hukum Agronomi
+        # 🧠 MESIN INFERENSI: Prioritas Range -> Override Cocok Mutlak -> Agronomi Asli
         # =========================================================================
         if ph_masuk_range and elevasi_masuk_range:
-            # Skenario 1: Titik uji identik dengan karakteristik lingkungan 4 tetangganya
-            kesimpulan_inferensi = f"DIASUMSIKAN {status_mayoritas.upper()}"
-            warna_inferensi = dapatkan_warna_cud(status_mayoritas)
-            keterangan_logika = f"Parameter ketinggian dan pH Titik Uji **masuk dalam range** 4 titik acuan terdekat. Titik ini diputuskan mewarisi status mayoritas tetangganya, yaitu: **{status_mayoritas}**."
+            kesimpulan_inferensi = status_mayoritas.title()
+            warna_inferensi = dapatkan_warna_cud(kesimpulan_inferensi)
+            keterangan_logika = f"Parameter ketinggian dan pH Titik Uji **masuk dalam range** 4 titik acuan terdekat. Titik ini mewarisi status mayoritas tetangganya: **{kesimpulan_inferensi}**."
+        elif len(status_unik) == 1 and status_unik[0] == 'cocok':
+            kesimpulan_inferensi = "Cocok"
+            warna_inferensi = dapatkan_warna_cud("Cocok")
+            keterangan_logika = "Sifat lingkungan di luar range referensi. Namun, karena ke-4 titik acuan terdekat secara mutlak berstatus 'Cocok', berdasarkan hukum **Autokorelasi Spasial Absolut** titik uji ini secara logis dipertahankan berstatus **COCOK**."
         else:
-            # Skenario 2: Titik uji di luar range spasial -> Evaluasi pakai hukum agronomi
+            # Aturan Agronomi Asli (Hanya terpicu jika data tetangga bervariasi dan titik ada di luar range)
             if elevasi_target < 1000:
-                kesimpulan_inferensi = "TIDAK COCOK"
-                warna_inferensi = "#d55e00"  # Merah
-                keterangan_logika = "Data di luar range referensi. Karena elevasi < 1000 mdpl, maka **kemungkinan tidak cocok** untuk kentang."
+                kesimpulan_inferensi = "Tidak Cocok"
+                warna_inferensi = "#d55e00"
+                keterangan_logika = "Data di luar range. Karena elevasi < 1000 mdpl, kemungkinan **tidak cocok** untuk pertumbuhan kentang."
             elif 1000 <= elevasi_target <= 1500:
                 if ph_target > 7.0:
-                    kesimpulan_inferensi = "BERPOTENSI COCOK"
-                    warna_inferensi = "#e69f00"  # Jingga
-                    keterangan_logika = "Data di luar range referensi. Namun karena elevasi 1000-1500 mdpl didukung pH > 7, maka **berpotensi cocok**."
+                    kesimpulan_inferensi = "Berpotensi Cocok"
+                    warna_inferensi = "#e69f00"
+                    keterangan_logika = "Data di luar range. Elevasi menengah (1000-1500 mdpl) didukung pH > 7, sehingga **berpotensi cocok**."
                 else:
-                    kesimpulan_inferensi = "TIDAK COCOK"
-                    warna_inferensi = "#d55e00"  # Merah
-                    keterangan_logika = "Data di luar range referensi. Ketinggian menengah (1000-1500 mdpl) namun terhambat oleh kondisi pH ≤ 7."
+                    kesimpulan_inferensi = "Tidak Cocok"
+                    warna_inferensi = "#d55e00"
+                    keterangan_logika = "Data di luar range. Elevasi menengah namun terhambat kondisi tanah (pH ≤ 7)."
             elif elevasi_target > 1500:
                 if ph_target > 6.5:
-                    kesimpulan_inferensi = "KEMUNGKINAN COCOK"
-                    warna_inferensi = "#009e73"  # Hijau
-                    keterangan_logika = "Data di luar range referensi. Karena elevasi ideal (>1500 mdpl) dan didukung pH > 6.5, maka **kemungkinan cocok**."
+                    kesimpulan_inferensi = "Kemungkinan Cocok"
+                    warna_inferensi = "#009e73"
+                    keterangan_logika = "Data di luar range. Elevasi ideal (>1500 mdpl) dan didukung pH > 6.5, **kemungkinan besar cocok**."
                 else:
-                    kesimpulan_inferensi = "TIDAK COCOK"
-                    warna_inferensi = "#d55e00"  # Merah
-                    keterangan_logika = "Data di luar range referensi. Ketinggian ideal (>1500 mdpl) namun kondisi tanah cenderung terlalu masam (pH ≤ 6.5)."
+                    kesimpulan_inferensi = "Tidak Cocok"
+                    warna_inferensi = "#d55e00"
+                    keterangan_logika = "Data di luar range. Elevasi ideal tetapi terkendala keasaman tanah (pH ≤ 6.5)."
 
-        # Tampilkan visualisasi parameter dasar lokasi
         k1, k2 = st.columns(2)
         with k1: st.metric("pH Lapangan Aktual", f"{ph_target:.2f}")
         with k2: st.metric("Ketinggian Elevasi", f"{elevasi_target:.0f} mdpl")
@@ -338,7 +339,7 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
             st.markdown(f"""
             <div style="background-color: rgba(19, 27, 21, 0.7); padding: 18px; border-radius: 6px; border-left: 5px solid {warna_inferensi}; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05);">
                 <span style="color: #8da68c; font-size: 0.85em; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px;">Keputusan Evaluasi Lahan:</span>
-                <b style="color: {warna_inferensi}; font-size: 1.3em; display: block; margin-top: 4px; letter-spacing: 0.5px;">{kesimpulan_inferensi}</b>
+                <b style="color: {warna_inferensi}; font-size: 1.3em; display: block; margin-top: 4px; letter-spacing: 0.5px;">{kesimpulan_inferensi.upper()}</b>
                 <i style="font-size: 0.88em; color: #cddbc0; display:block; margin-top:8px; line-height: 1.5; text-align: justify;">{keterangan_logika}</i>
             </div>
             """, unsafe_allow_html=True)
@@ -355,8 +356,28 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
                 with c1: st.metric("Mean Absolute Error (MAE)", f"{error_mae:.2f}")
                 with c2: st.metric("Normalized Error (NMAE)", f"{(error_mae / df_kriging_unique[parameter_terpilih].mean()) * 100:.2f} %")
                 
-                st.markdown(f"""<div style="background-color: rgba(19, 27, 21, 0.45); padding: 15px; border-radius: 6px; border-left: 3px solid #a3bfa2; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.03);"><b style="color: #d2e7b9; font-size:0.95em;">Catatan Validasi Spasial</b><br><i style="font-size: 0.85em; color: #8da68c; display:block; margin-top:5px; line-height: 1.5;">Evaluasi model univariat menunjukkan variabilitas sebaran hara makro pada grid mikro sentra Dieng. Perbedaan \u0394H terbukti tidak berkorelasi linier terhadap fluktuasi galat prediksi.</i></div>""", unsafe_allow_html=True)
+                # =========================================================================
+                # 📋 PENAMBAHAN FITUR: TABEL PARAMETER HASIL INTERPOLASI DI BAWAH METRIK
+                # =========================================================================
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("##### 📋 Tabel Parameter Titik Uji & Acuan")
+                
+                # Membuat Dataframe untuk ditampilkan di web
+                df_tabel = titik_acuan_4[['Desa', 'Lat', 'Lon', 'Elevasi', 'PH', parameter_terpilih, 'Kecocokan']].copy()
+                df_tabel['Peran'] = 'Titik Acuan'
+                
+                df_target = pd.DataFrame([{
+                    'Desa': f"🎯 TARGET: {t_desa}", 'Lat': t_lat, 'Lon': t_lon, 'Elevasi': elevasi_target, 
+                    'PH': ph_target, parameter_terpilih: round(prediksi_kriging, 2), 
+                    'Kecocokan': kesimpulan_inferensi.title(), 'Peran': 'Titik Uji Aktual'
+                }])
+                
+                df_gabungan = pd.concat([df_target, df_tabel], ignore_index=True)
+                df_gabungan.rename(columns={parameter_terpilih: f"Kandungan {parameter_terpilih}"}, inplace=True)
+                
+                st.dataframe(df_gabungan, use_container_width=True, hide_index=True)
+                
             else: 
                 st.error(status_hitung)
         else: 
-            st.info("Silakan tentukan variabel nutrisi dan target node di sidebar, lalu klik 'Hitung Estimasi Spasial' untuk memulai kalkulasi dan memunculkan hasil inferensi kesesuaian lahan.")
+            st.info("Silakan tentukan variabel nutrisi dan target node di sidebar, lalu klik 'Hitung Estimasi Spasial' untuk memulai kalkulasi dan memunculkan hasil inferensi kesesuaian lahan beserta tabel parameternya.")

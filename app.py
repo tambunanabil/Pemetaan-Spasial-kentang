@@ -62,10 +62,6 @@ st.markdown(f"""
         padding-bottom: 4rem !important;
         max-width: 90% !important;
     }}
-    [data-testid="stDataFrame"] {{
-        background-color: rgba(19, 27, 21, 0.6);
-        border-radius: 6px;
-    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -250,7 +246,8 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
         except Exception as e:
             status_hitung = f"Galat: {e}"
 
-    kolom_kiri, kolom_kanan = st.columns([1.55, 1.45])
+    # Mengubah rasio agar tabel bisa melebar optimal dan map tetap proporsional
+    kolom_kiri, kolom_kanan = st.columns([1.65, 1.35])
     
     with kolom_kiri:
         st.markdown("<h4 style='font-weight: 400; color: #d2e7b9; letter-spacing: 0.5px;'>Peta Lokasi Titik Uji LOOCV</h4>", unsafe_allow_html=True)
@@ -313,26 +310,45 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
                 popup=folium.Popup(html_table_popup, max_width=220)
             ).add_to(peta_lahan)
             
-        components.html(peta_lahan._repr_html_(), height=450)
+        components.html(peta_lahan._repr_html_(), height=420)
 
-        # TABEL PARAMETER (Dipindah ke Kolom Kiri di Bawah Peta agar ruang termanfaatkan maksimal)
+        # TABEL PARAMETER HTML CUSTOM: Besar, Rapat ke atas, Profesional, Fokus ke Aktual vs Prediksi
         if hitung_btn and status_hitung == "Sukses":
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("<h5 style='font-weight: 400; color: #d2e7b9;'>Detail Parameter Geostatistik</h5>", unsafe_allow_html=True)
+            st.markdown(f"<h5 style='font-weight: 400; color: #d2e7b9; margin-top: -20px;'>Data Parameter: {parameter_terpilih}</h5>", unsafe_allow_html=True)
             
-            df_tabel = titik_acuan_4[['Desa', 'Lat', 'Lon', 'Elevasi', 'PH', parameter_terpilih, 'Kecocokan']].copy()
-            df_tabel['Peran'] = 'Acuan'
+            html_table = f"""
+            <table style="width: 100%; border-collapse: collapse; text-align: center; color: #e4eed7; background-color: rgba(19, 27, 21, 0.6); border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+                <tr style="background-color: rgba(163, 191, 162, 0.15); color: #cddbc0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">Sentra (Desa)</th>
+                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">Peran Spasial</th>
+                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">Lat</th>
+                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">Lon</th>
+                    <th style="padding: 12px 10px; font-weight: 500; font-size: 1.05em;">{parameter_terpilih} (Aktual)</th>
+                    <th style="padding: 12px 10px; font-weight: 600; font-size: 1.05em; color: #e69f00;">{parameter_terpilih} (Prediksi)</th>
+                </tr>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); background-color: rgba(213, 94, 0, 0.15);">
+                    <td style="padding: 12px 10px; font-weight: bold; color:#cc3333;">{t_desa}</td>
+                    <td style="padding: 12px 10px; font-weight: bold; color:#cc3333;">Titik Uji</td>
+                    <td style="padding: 12px 10px;">{t_lat:.5f}</td>
+                    <td style="padding: 12px 10px;">{t_lon:.5f}</td>
+                    <td style="padding: 12px 10px; font-weight: 500;">{nilai_aktual:.2f}</td>
+                    <td style="padding: 12px 10px; font-weight: bold; font-size: 1.15em; color: #e69f00;">{prediksi_kriging:.2f}</td>
+                </tr>
+            """
             
-            df_target = pd.DataFrame([{
-                'Desa': f"Target: {t_desa}", 'Lat': t_lat, 'Lon': t_lon, 'Elevasi': elevasi_target, 
-                'PH': ph_target, parameter_terpilih: round(prediksi_kriging, 2), 
-                'Kecocokan': kesimpulan_inferensi.title(), 'Peran': 'Uji'
-            }])
-            
-            df_gabungan = pd.concat([df_target, df_tabel], ignore_index=True)
-            df_gabungan.rename(columns={parameter_terpilih: f"Prediksi {parameter_terpilih}"}, inplace=True)
-            
-            st.dataframe(df_gabungan, use_container_width=True, hide_index=True)
+            for _, row in titik_acuan_4.iterrows():
+                html_table += f"""
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding: 12px 10px;">{row['Desa']}</td>
+                    <td style="padding: 12px 10px; color:#8da68c;">Titik Acuan</td>
+                    <td style="padding: 12px 10px;">{row['Lat']:.5f}</td>
+                    <td style="padding: 12px 10px;">{row['Lon']:.5f}</td>
+                    <td style="padding: 12px 10px;">{row[parameter_terpilih]:.2f}</td>
+                    <td style="padding: 12px 10px; color:#5b6b5c;">-</td>
+                </tr>
+                """
+            html_table += "</table>"
+            st.markdown(html_table, unsafe_allow_html=True)
 
     with kolom_kanan:
         st.markdown("<h4 style='font-weight: 400; color: #d2e7b9; letter-spacing: 0.5px;'>Karakteristik Titik & Inferensi</h4>", unsafe_allow_html=True)

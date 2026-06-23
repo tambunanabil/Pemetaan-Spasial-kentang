@@ -227,7 +227,6 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
             attr='Esri Topographic Map'
         )
         
-        # 1. Plotting Titik Uji Target (Menggunakan Pin Lokasi Elegan Orisinal)
         warna_target_cud = dapatkan_warna_cud(status_aktual_target)
         folium.Marker(
             [t_lat, t_lon], 
@@ -241,7 +240,6 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
             icon=folium.Icon(color='red', icon='location', prefix='fa')
         ).add_to(peta_lahan)
         
-        # 2. Plotting Titik Referensi Acuan (Pop-up Tabel Parameter Lengkap)
         for _, row in df_kriging_unique.iterrows():
             r_lat, r_lon = float(row['Lat']), float(row['Lon'])
             if r_lat == t_lat and r_lon == t_lon:
@@ -253,7 +251,6 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
             radius_size = 10 if is_acuan else 6
             warna_node_cud = dapatkan_warna_cud(row['Kecocokan'])
             
-            # Pengembalian struktur data tabel parameter di dalam pop-up penanda peta
             html_table_popup = f"""
             <div style="font-family: 'Segoe UI', Arial; font-size: 11px; width: 180px; padding: 5px;">
                 <b style="color:{warna_node_cud}; font-size:12px; display:block; margin-bottom:5px;">🏠 Sentra: {row['Desa']}</b>
@@ -294,34 +291,40 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
         ph_masuk_range = min_ph_acuan <= ph_target <= max_ph_acuan
         elevasi_masuk_range = min_el_acuan <= elevasi_target <= max_el_acuan
         
-        # Eksekusi Logika Matriks Pengondisian Agronomis Fleksibel untuk Kesimpulan TA
-        if not (ph_masuk_range and elevasi_masuk_range):
-            kesimpulan_inferensi = "Posisi yang ditentukan di luar jangkauan data referensi"
-            warna_inferensi = "#7f8c8d"  # Abu-abu Netral Keluar Batas
+        status_mayoritas = titik_acuan_4['Kecocokan'].mode()[0]
+
+        # =========================================================================
+        # 🧠 MESIN INFERENSI BARU: Prioritas Spasial (Range) -> Hukum Agronomi
+        # =========================================================================
+        if ph_masuk_range and elevasi_masuk_range:
+            # Skenario 1: Titik uji identik dengan karakteristik lingkungan 4 tetangganya
+            kesimpulan_inferensi = f"DIASUMSIKAN {status_mayoritas.upper()}"
+            warna_inferensi = dapatkan_warna_cud(status_mayoritas)
+            keterangan_logika = f"Parameter ketinggian dan pH Titik Uji **masuk dalam range** 4 titik acuan terdekat. Titik ini diputuskan mewarisi status mayoritas tetangganya, yaitu: **{status_mayoritas}**."
         else:
+            # Skenario 2: Titik uji di luar range spasial -> Evaluasi pakai hukum agronomi
             if elevasi_target < 1000:
-                kesimpulan_inferensi = "Tidak Cocok"
-                warna_inferensi = "#d55e00"  # Merah Vermilion
+                kesimpulan_inferensi = "TIDAK COCOK"
+                warna_inferensi = "#d55e00"  # Merah
+                keterangan_logika = "Data di luar range referensi. Karena elevasi < 1000 mdpl, maka **kemungkinan tidak cocok** untuk kentang."
             elif 1000 <= elevasi_target <= 1500:
                 if ph_target > 7.0:
-                    kesimpulan_inferensi = "Berpotensi Cocok"
-                    warna_inferensi = "#e69f00"  # Jingga CUD
+                    kesimpulan_inferensi = "BERPOTENSI COCOK"
+                    warna_inferensi = "#e69f00"  # Jingga
+                    keterangan_logika = "Data di luar range referensi. Namun karena elevasi 1000-1500 mdpl didukung pH > 7, maka **berpotensi cocok**."
                 else:
-                    status_mayoritas = titik_acuan_4['Kecocokan'].mode()[0]
-                    kesimpulan_inferensi = status_mayoritas
-                    warna_inferensi = dapatkan_warna_cud(status_mayoritas)
+                    kesimpulan_inferensi = "TIDAK COCOK"
+                    warna_inferensi = "#d55e00"  # Merah
+                    keterangan_logika = "Data di luar range referensi. Ketinggian menengah (1000-1500 mdpl) namun terhambat oleh kondisi pH ≤ 7."
             elif elevasi_target > 1500:
                 if ph_target > 6.5:
-                    kesimpulan_inferensi = "Cocok"
-                    warna_inferensi = "#009e73"  # Hijau CUD
+                    kesimpulan_inferensi = "KEMUNGKINAN COCOK"
+                    warna_inferensi = "#009e73"  # Hijau
+                    keterangan_logika = "Data di luar range referensi. Karena elevasi ideal (>1500 mdpl) dan didukung pH > 6.5, maka **kemungkinan cocok**."
                 else:
-                    status_mayoritas = titik_acuan_4['Kecocokan'].mode()[0]
-                    kesimpulan_inferensi = status_mayoritas
-                    warna_inferensi = dapatkan_warna_cud(status_mayoritas)
-            else:
-                status_mayoritas = titik_acuan_4['Kecocokan'].mode()[0]
-                kesimpulan_inferensi = status_mayoritas
-                warna_inferensi = dapatkan_warna_cud(status_mayoritas)
+                    kesimpulan_inferensi = "TIDAK COCOK"
+                    warna_inferensi = "#d55e00"  # Merah
+                    keterangan_logika = "Data di luar range referensi. Ketinggian ideal (>1500 mdpl) namun kondisi tanah cenderung terlalu masam (pH ≤ 6.5)."
 
         # Tampilkan visualisasi parameter dasar lokasi
         k1, k2 = st.columns(2)
@@ -330,13 +333,13 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
         
         st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0;'>", unsafe_allow_html=True)
         
-        # 🔔 ALUR INTERAKSI KONDISIONAL: Munculkan data hanya setelah tombol klik diaktifkan
         if hitung_btn:
             st.markdown("##### 📊 Hasil Analisis Klasifikasi Inferensi:")
             st.markdown(f"""
             <div style="background-color: rgba(19, 27, 21, 0.7); padding: 18px; border-radius: 6px; border-left: 5px solid {warna_inferensi}; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05);">
-                <span style="color: #8da68c; font-size: 0.85em; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px;">Keputusan Evaluasi Spasial-Agronomis:</span>
-                <b style="color: #ffffff; font-size: 1.3em; display: block; margin-top: 4px; letter-spacing: 0.5px;">{kesimpulan_inferensi.upper()}</b>
+                <span style="color: #8da68c; font-size: 0.85em; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px;">Keputusan Evaluasi Lahan:</span>
+                <b style="color: {warna_inferensi}; font-size: 1.3em; display: block; margin-top: 4px; letter-spacing: 0.5px;">{kesimpulan_inferensi}</b>
+                <i style="font-size: 0.88em; color: #cddbc0; display:block; margin-top:8px; line-height: 1.5; text-align: justify;">{keterangan_logika}</i>
             </div>
             """, unsafe_allow_html=True)
             

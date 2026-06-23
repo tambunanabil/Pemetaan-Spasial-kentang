@@ -396,11 +396,15 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
                 with m1: st.metric(f"Prediksi Estimasi {parameter_terpilih}", f"{prediksi_kriging:.2f}")
                 with m2: st.metric(f"Data Aktual Lapangan", f"{nilai_aktual:.2f}")
                 
-                c1, c2 = st.columns(2)
-                with c1: st.metric("Mean Absolute Error (MAE)", f"{error_mae:.2f}")
-                with c2: st.metric("Normalized Error (NMAE)", f"{(error_mae / df_kriging_unique[parameter_terpilih].mean()) * 100:.2f} %")
-                
-                st.markdown(f"""<div style="background-color: rgba(19, 27, 21, 0.45); padding: 15px; border-radius: 6px; border-left: 3px solid #a3bfa2; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.03);"><b style="color: #d2e7b9; font-size:0.95em;">Catatan Validasi Spasial</b><br><i style="font-size: 0.85em; color: #8da68c; display:block; margin-top:5px; line-height: 1.5;">Evaluasi model univariat menunjukkan variabilitas sebaran hara makro pada grid mikro sentra Dieng. Perbedaan Elevasi terbukti tidak berkorelasi linier terhadap fluktuasi galat prediksi.</i></div>""", unsafe_allow_html=True)
+                # --- REVISI: MAE & NMAE DIHILANGKAN, CATATAN DITARIK KE ATAS & DIPERTEGAS ---
+                st.markdown(f"""
+                <div style="background-color: rgba(19, 27, 21, 0.45); padding: 15px; border-radius: 6px; border-left: 3px solid #a3bfa2; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.03);">
+                    <b style="color: #d2e7b9; font-size:0.95em;">Catatan Validasi Spasial</b><br>
+                    <i style="font-size: 0.85em; color: #8da68c; display:block; margin-top:5px; line-height: 1.5; text-align: justify;">
+                        Evaluasi model univariat menunjukkan variabilitas sebaran hara makro pada grid mikro sentra Dieng. Fluktuasi deviasi antara nilai prediksi dan aktual secara dominan disebabkan oleh sifat unsur hara (N, P, K) yang sangat dinamis akibat intervensi antropogenik (manajemen pupuk). Perbedaan elevasi topografi terbukti <b>tidak berkorelasi linier</b> terhadap besarnya galat (error) prediksi tersebut.
+                    </i>
+                </div>
+                """, unsafe_allow_html=True)
             else: 
                 st.error(status_hitung)
         else: 

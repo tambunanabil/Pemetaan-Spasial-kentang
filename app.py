@@ -175,7 +175,22 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
     st.sidebar.markdown("<h3 style='font-size: 1.1em; font-weight:400;'>Parameter Komputasi</h3>", unsafe_allow_html=True)
     parameter_terpilih = st.sidebar.selectbox("Variabel Nutrisi:", ["N", "P", "K", "PH"])
     
-    df_kriging_unique = df_kriging.groupby(['Desa', 'Lat', 'Lon', 'Kecocokan']).mean(numeric_only=True).reset_index()
+    # ---------------------------------------------------------
+    # PERBAIKAN FATAL: GROUPBY HANYA BERDASARKAN DESA
+    # Ini memastikan 2-4 titik pengukuran dirata-ratakan jadi 1
+    # ---------------------------------------------------------
+    df_kriging_unique = df_kriging.groupby('Desa').agg({
+        'Lat': 'mean',
+        'Lon': 'mean',
+        'Elevasi': 'mean',
+        'N': 'mean',
+        'P': 'mean',
+        'K': 'mean',
+        'PH': 'mean',
+        'Kecocokan': 'first' # Mengambil status kesesuaian pertama karena diasumsikan sama se-desa
+    }).reset_index()
+    # ---------------------------------------------------------
+
     opsi_desa = [f"{row['Desa']} ({row['Lat']:.5f}, {row['Lon']:.5f})" for _, row in df_kriging_unique.iterrows()]
     pilihan_target = st.sidebar.selectbox("LOOCV Target Node:", opsi_desa)
     model_variogram = st.sidebar.selectbox("Fungsi Variogram:", ["linear", "spherical", "exponential", "gaussian"])
@@ -315,7 +330,7 @@ elif st.session_state.current_page == "Analisis Kriging (Mikro)":
             
         components.html(peta_lahan._repr_html_(), height=450)
 
-        # TABEL PARAMETER (Dipindah ke Kolom Kiri di Bawah Peta agar ruang termanfaatkan maksimal)
+        # TABEL PARAMETER 
         if hitung_btn and status_hitung == "Sukses":
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("<h5 style='font-weight: 400; color: #d2e7b9;'>Detail Parameter Geostatistik</h5>", unsafe_allow_html=True)
